@@ -573,77 +573,95 @@ const GOOGLE_SHEET_ID = '16-ant77j9ckFE7y48mOaqmMvUQrx8ZzM-ksWHaFNSUU'; // ← G
                 }
             },
 
-            // --- SESSION & AUTOSAVE ---
-            session: {
-                save() {
-                    const sessionData = {
-                        apiKeys: {
-                            gemini: TranslatorApp.security.encrypt(TranslatorApp.dom.geminiKeyInput.value),
-                            chatgpt: TranslatorApp.security.encrypt(TranslatorApp.dom.chatgptKeyInput.value),
-                        },
-                        localModelUrl: TranslatorApp.dom.localModelUrl.value,
-                        localModelName: TranslatorApp.dom.localModelName.value,
-                        selectedProvider: document.querySelector('input[name="apiProvider"]:checked').value,
-                        selectedFilesInfo: TranslatorApp.state.selectedFilesInfo,
-                        originalJsonData: TranslatorApp.state.originalJsonData,
-                        translatedJsonData: TranslatorApp.state.translatedJsonData,
-                        glossary: TranslatorApp.state.glossary,
-                        activeScreen: TranslatorApp.state.activeScreen,
-                        mappedIds: TranslatorApp.dom.mappedIdsInput.value,
-                        useMappedIds: TranslatorApp.dom.useMappedIdsCheckbox.checked,
-                        selectedSubject: TranslatorApp.state.selectedSubject,
-                        selectedGrade: TranslatorApp.state.selectedGrade,
-                        termbaseUrl: TranslatorApp.dom.termbaseUrl.value
-                    };
-                    localStorage.setItem('translatorSession', JSON.stringify(sessionData));
-                    TranslatorApp.state.hasUnsavedChanges = false;
-                },
-                load() {
-                    const savedSession = localStorage.getItem('translatorSession');
-                    if (!savedSession) return;
-                    
-                    const sessionData = JSON.parse(savedSession);
-                    TranslatorApp.dom.geminiKeyInput.value = TranslatorApp.security.decrypt(sessionData.apiKeys?.gemini || '');
-                    TranslatorApp.dom.chatgptKeyInput.value = TranslatorApp.security.decrypt(sessionData.apiKeys?.chatgpt || '');
-                    TranslatorApp.dom.localModelUrl.value = sessionData.localModelUrl || 'http://localhost:11434/api/generate';
-                    TranslatorApp.dom.localModelName.value = sessionData.localModelName || 'gemma:7b';
-                    
-                    TranslatorApp.state.selectedFilesInfo = sessionData.selectedFilesInfo || [];
-                    TranslatorApp.state.originalJsonData = sessionData.originalJsonData || [];
-                    TranslatorApp.state.translatedJsonData = sessionData.translatedJsonData || [];
-                    TranslatorApp.state.glossary = sessionData.glossary || [];
-                    TranslatorApp.state.activeScreen = sessionData.activeScreen || 'setup';
-                    TranslatorApp.dom.mappedIdsInput.value = sessionData.mappedIds || '[]';
-                    TranslatorApp.dom.useMappedIdsCheckbox.checked = sessionData.useMappedIds || false;
-                    TranslatorApp.state.selectedSubject = sessionData.selectedSubject || 'None';
-                    TranslatorApp.state.selectedGrade = sessionData.selectedGrade || 'None';
-                    TranslatorApp.dom.termbaseUrl.value = sessionData.termbaseUrl || 'https://script.google.com/macros/s/AKfycbzUGuESM-IhkKIG7aupf91Ia8cZSTqqt2Tj9QukUq9FAYvNOyyjYegJcv-wUp7DTFI/exec';
-                    
-                    if (sessionData.selectedProvider) {
-                        document.querySelector(`input[name="apiProvider"][value="${sessionData.selectedProvider}"]`).checked = true;
-                        TranslatorApp.events.onApiProviderChange({ target: { value: sessionData.selectedProvider } });
-                    }
-                    
-                    TranslatorApp.ui.renderFileList();
-                    TranslatorApp.glossary.render();
-                    TranslatorApp.subjects.updateUI();
-                    
-                    if (TranslatorApp.state.activeScreen === 'preview' && TranslatorApp.state.translatedJsonData.length > 0) {
-                        TranslatorApp.ui.showScreen('preview');
-                        TranslatorApp.preview.render();
-                        const stats = TranslatorApp.statistics.calculate();
-                        TranslatorApp.ui.renderStatistics(stats);
-                        TranslatorApp.history.push(TranslatorApp.state.translatedJsonData);
-                    } else {
-                        TranslatorApp.ui.showScreen('setup');
-                    }
-                    TranslatorApp.ui.showAlert('تم استعادة الجلسة السابقة بنجاح.', 'success');
-                },
-                clear() {
-                    localStorage.removeItem('translatorSession');
-                    location.reload();
-                }
+        // إصلاح دالة session.load لإزالة المرجع المعطل
+session: {
+    save() {
+        const sessionData = {
+            apiKeys: {
+                gemini: TranslatorApp.security.encrypt(TranslatorApp.dom.geminiKeyInput.value),
+                chatgpt: TranslatorApp.security.encrypt(TranslatorApp.dom.chatgptKeyInput.value),
             },
+            localModelUrl: TranslatorApp.dom.localModelUrl.value,
+            localModelName: TranslatorApp.dom.localModelName.value,
+            selectedProvider: document.querySelector('input[name="apiProvider"]:checked').value,
+            selectedFilesInfo: TranslatorApp.state.selectedFilesInfo,
+            originalJsonData: TranslatorApp.state.originalJsonData,
+            translatedJsonData: TranslatorApp.state.translatedJsonData,
+            glossary: TranslatorApp.state.glossary,
+            activeScreen: TranslatorApp.state.activeScreen,
+            mappedIds: TranslatorApp.dom.mappedIdsInput.value,
+            useMappedIds: TranslatorApp.dom.useMappedIdsCheckbox.checked,
+            selectedSubject: TranslatorApp.state.selectedSubject,
+            selectedGrade: TranslatorApp.state.selectedGrade
+            // تم إزالة termbaseUrl لأنه غير موجود في الـ DOM
+        };
+        localStorage.setItem('translatorSession', JSON.stringify(sessionData));
+        TranslatorApp.state.hasUnsavedChanges = false;
+    },
+
+    load() {
+        const savedSession = localStorage.getItem('translatorSession');
+        if (!savedSession) return;
+        
+        try {
+            const sessionData = JSON.parse(savedSession);
+            
+            // استعادة القيم الأساسية
+            TranslatorApp.dom.geminiKeyInput.value = TranslatorApp.security.decrypt(sessionData.apiKeys?.gemini || '');
+            TranslatorApp.dom.chatgptKeyInput.value = TranslatorApp.security.decrypt(sessionData.apiKeys?.chatgpt || '');
+            TranslatorApp.dom.localModelUrl.value = sessionData.localModelUrl || 'http://localhost:11434/api/generate';
+            TranslatorApp.dom.localModelName.value = sessionData.localModelName || 'gemma:7b';
+            
+            // استعادة حالة التطبيق
+            TranslatorApp.state.selectedFilesInfo = sessionData.selectedFilesInfo || [];
+            TranslatorApp.state.originalJsonData = sessionData.originalJsonData || [];
+            TranslatorApp.state.translatedJsonData = sessionData.translatedJsonData || [];
+            TranslatorApp.state.glossary = sessionData.glossary || [];
+            TranslatorApp.state.activeScreen = sessionData.activeScreen || 'setup';
+            TranslatorApp.dom.mappedIdsInput.value = sessionData.mappedIds || '[]';
+            TranslatorApp.dom.useMappedIdsCheckbox.checked = sessionData.useMappedIds || false;
+            TranslatorApp.state.selectedSubject = sessionData.selectedSubject || 'None';
+            TranslatorApp.state.selectedGrade = sessionData.selectedGrade || 'None';
+            
+            // استعادة مزود الخدمة المختار
+            if (sessionData.selectedProvider) {
+                const providerRadio = document.querySelector(`input[name="apiProvider"][value="${sessionData.selectedProvider}"]`);
+                if (providerRadio) {
+                    providerRadio.checked = true;
+                    TranslatorApp.events.onApiProviderChange({ target: { value: sessionData.selectedProvider } });
+                }
+            }
+            
+            // تحديث الواجهة
+            TranslatorApp.ui.renderFileList();
+            TranslatorApp.glossary.render();
+            TranslatorApp.subjects.updateUI();
+            
+            // استعادة الشاشة النشطة
+            if (TranslatorApp.state.activeScreen === 'preview' && TranslatorApp.state.translatedJsonData.length > 0) {
+                TranslatorApp.ui.showScreen('preview');
+                TranslatorApp.preview.render();
+                const stats = TranslatorApp.statistics.calculate();
+                TranslatorApp.ui.renderStatistics(stats);
+                TranslatorApp.history.push(TranslatorApp.state.translatedJsonData);
+            } else {
+                TranslatorApp.ui.showScreen('setup');
+            }
+            
+            TranslatorApp.ui.showAlert('تم استعادة الجلسة السابقة بنجاح.', 'success');
+            
+        } catch (error) {
+            console.error('خطأ في استعادة الجلسة:', error);
+            TranslatorApp.ui.showAlert('حدث خطأ أثناء استعادة الجلسة السابقة.', 'error');
+        }
+    },
+
+    clear() {
+        localStorage.removeItem('translatorSession');
+        location.reload();
+    }
+}
+             
             
             autoSave: {
                 init() {
@@ -1734,39 +1752,174 @@ const GOOGLE_SHEET_ID = '16-ant77j9ckFE7y48mOaqmMvUQrx8ZzM-ksWHaFNSUU'; // ← G
 
         document.addEventListener('DOMContentLoaded', () => TranslatorApp.init());
 
-        // --- دالة جلب القاموس من Google Sheet ---
-        async function fetchGlossaryFromSheet(subject) {
-            const url = TranslatorApp.dom.termbaseUrl.value;
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sheetId: GOOGLE_SHEET_ID, subject })
-                });
-                const result = await response.json();
-                if (result.success && Array.isArray(result.glossary)) {
-                    // أضف فقط المصطلحات الجديدة غير المكررة
-                    const newEntries = result.glossary.filter(entry =>
-                        entry.term && entry.translation &&
-                        !TranslatorApp.state.glossary.some(existing => existing.term.toLowerCase() === entry.term.toLowerCase())
-                    ).map(entry => ({
-                        term: entry.term,
-                        translation: entry.translation,
-                        category: subject
-                    }));
-                    TranslatorApp.state.glossary = [...TranslatorApp.state.glossary, ...newEntries];
-                    TranslatorApp.glossary.render();
-                    TranslatorApp.state.hasUnsavedChanges = true;
-                    TranslatorApp.ui.showAlert(`تم إضافة ${newEntries.length} مصطلح جديد من الشيت إلى القاموس.`, 'success');
-                } else {
-                    TranslatorApp.ui.showAlert('لم يتم العثور على مصطلحات لهذه المادة أو حدث خطأ.', 'error');
-                }
-            } catch (e) {
-                TranslatorApp.ui.showAlert('حدث خطأ أثناء جلب القاموس من الشيت', 'error');
-            }
-        }
+ // --- دالة جلب القاموس من Google Sheet مُصححة ---
+async function fetchGlossaryFromSheet(subject) {
+    // تحقق من أن المادة ليست "None"
+    if (!subject || subject === 'None') {
+        console.log('Subject is None, skipping glossary fetch');
+        return;
+    }
 
-        // ... باقي كود TranslatorApp ...
+    // استخدم الرابط المباشر للويب أب
+    const webAppUrl = 'https://script.google.com/macros/s/AKfycbzUGuESM-IhkKIG7aupf91Ia8cZSTqqt2Tj9QukUq9FAYvNOyyjYegJcv-wUp7DTFI/exec';
+    
+    TranslatorApp.ui.showAlert(`جاري جلب المصطلحات للمادة: ${subject}...`, 'info', 3000);
+    
+    try {
+        console.log('Fetching glossary for subject:', subject);
+        console.log('Using Web App URL:', webAppUrl);
+        
+        const requestBody = {
+            sheetId: GOOGLE_SHEET_ID,
+            subject: subject
+        };
+        
+        console.log('Request body:', requestBody);
+        
+        const response = await fetch(webAppUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+            mode: 'cors',
+            cache: 'no-cache'
+        });
+        
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+        }
+        
+        const responseText = await response.text();
+        console.log('Raw response:', responseText.substring(0, 200) + '...'); // Log first 200 chars
+        
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('JSON parsing error:', parseError);
+            console.log('Full response that failed to parse:', responseText);
+            throw new Error('استجابة غير صالحة من الخادم - ليس JSON صحيح');
+        }
+        
+        console.log('Parsed result:', result);
+        
+        if (result.error) {
+            throw new Error(`خطأ من الخادم: ${result.error}`);
+        }
+        
+        if (result.success && Array.isArray(result.glossary)) {
+            // أضف فقط المصطلحات الجديدة غير المكررة
+            const newEntries = result.glossary.filter(entry => {
+                if (!entry.term || !entry.translation) {
+                    console.warn('Skipping entry with missing term or translation:', entry);
+                    return false;
+                }
+                
+                const termLower = entry.term.toLowerCase().trim();
+                const exists = TranslatorApp.state.glossary.some(existing => 
+                    existing.term.toLowerCase().trim() === termLower
+                );
+                
+                if (exists) {
+                    console.log('Skipping duplicate term:', entry.term);
+                }
+                
+                return !exists;
+            }).map(entry => ({
+                term: entry.term.trim(),
+                translation: entry.translation.trim(),
+                category: subject,
+                dateAdded: new Date().toISOString(),
+                source: 'google_sheet'
+            }));
+            
+            console.log(`Processing ${result.glossary.length} terms, adding ${newEntries.length} new ones`);
+            
+            TranslatorApp.state.glossary = [...TranslatorApp.state.glossary, ...newEntries];
+            TranslatorApp.glossary.render();
+            TranslatorApp.state.hasUnsavedChanges = true;
+            
+            if (newEntries.length > 0) {
+                TranslatorApp.ui.showAlert(
+                    `✅ تم إضافة ${newEntries.length} مصطلح جديد للمادة: ${subject}`, 
+                    'success'
+                );
+            } else {
+                TranslatorApp.ui.showAlert(
+                    `ℹ️ تم العثور على ${result.glossary.length} مصطلح للمادة ${subject}، لكن جميعها موجودة مسبقاً`, 
+                    'info'
+                );
+            }
+            
+        } else if (!result.success && result.message) {
+            TranslatorApp.ui.showAlert(`رسالة من الخادم: ${result.message}`, 'info');
+        } else {
+            throw new Error('هيكل البيانات المُستلمة غير صحيح أو لا توجد مصطلحات');
+        }
+        
+    } catch (error) {
+        console.error('Fetch glossary error:', error);
+        
+        let errorMessage = 'حدث خطأ أثناء جلب المصطلحات: ';
+        
+        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+            errorMessage += 'لا يمكن الوصول للخادم. تأكد من:\n• الاتصال بالإنترنت\n• صحة رابط الويب أب\n• نشر الويب أب بالأذونات الصحيحة';
+        } else if (error.message.includes('CORS')) {
+            errorMessage += 'مشكلة في أذونات CORS. تأكد من نشر الويب أب للجميع (Anyone)';
+        } else if (error.message.includes('HTTP error')) {
+            errorMessage += `خطأ في الخادم: ${error.message}`;
+        } else {
+            errorMessage += error.message;
+        }
+        
+        TranslatorApp.ui.showAlert(errorMessage, 'error', 10000);
+        
+        // اقتراح حل بديل
+        setTimeout(() => {
+            TranslatorApp.ui.showAlert(
+                '💡 حل بديل: يمكنك إضافة المصطلحات يدوياً من خلال "إدارة القاموس المخصص"', 
+                'info', 
+                8000
+            );
+        }, 2000);
+    }
+}
+
+// تحديث دالة apply في subjects مع إزالة المرجع المعطل
+TranslatorApp.subjects.apply = async function() {
+    TranslatorApp.state.selectedSubject = TranslatorApp.dom.subjectSelect.value;
+    TranslatorApp.state.selectedGrade = TranslatorApp.dom.gradeSelect.value;
+    TranslatorApp.state.hasUnsavedChanges = true;
+    TranslatorApp.ui.showSubjectsModal(false);
+    
+    TranslatorApp.ui.showAlert(
+        `تم تطبيق إعدادات: ${TranslatorApp.state.selectedSubject} - ${TranslatorApp.state.selectedGrade}`,
+        'success'
+    );
+    
+    // جلب القاموس من الشيت بعد اختيار المادة
+    if (TranslatorApp.state.selectedSubject !== 'None') {
+        try {
+            await fetchGlossaryFromSheet(TranslatorApp.state.selectedSubject);
+        } catch (error) {
+            console.error('Error in subjects.apply:', error);
+        }
+    }
+};
+
+// دالة مساعدة لاختبار الاتصال بالويب أب
+window.testGlossaryConnection = async function() {
+    console.log('🔍 اختبار الاتصال بالويب أب...');
+    try {
+        await fetchGlossaryFromSheet('Mathematics');
+    } catch (error) {
+        console.error('اختبار الاتصال فشل:', error);
+    }
+};
         // عدل دالة apply في TranslatorApp.subjects:
         TranslatorApp.subjects.apply = async function() {
             TranslatorApp.state.selectedSubject = TranslatorApp.dom.subjectSelect.value;
