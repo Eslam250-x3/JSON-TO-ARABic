@@ -812,20 +812,37 @@
                     if (!file) return;
                     try {
                         const text = await file.text();
-                        const imported = JSON.parse(text);
+                        let imported;
+                        // تحقق إذا كان الملف CSV أو JSON
+                        if (file.name.endsWith('.csv') || text.trim().startsWith('Term,')) {
+                            // معالجة CSV: توقع عمودين Term, Translated Term
+                            const lines = text.split(/\r?\n/).filter(line => line.trim());
+                            const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+                            const termIdx = header.findIndex(h => h.toLowerCase() === 'term');
+                            const transIdx = header.findIndex(h => h.toLowerCase().includes('translated'));
+                            if (termIdx === -1 || transIdx === -1) throw new Error('CSV يجب أن يحتوي على عمودين: Term, Translated Term');
+                            imported = lines.slice(1).map(line => {
+                                const cols = line.split(',').map(c => c.replace(/^"|"$/g, ''));
+                                return {
+                                    term: cols[termIdx],
+                                    translation: cols[transIdx]
+                                };
+                            }).filter(row => row.term && row.translation);
+                        } else {
+                            // معالجة JSON
+                            imported = JSON.parse(text);
+                        }
                         if (!Array.isArray(imported)) throw new Error("الملف غير صالح.");
-                        
                         const newEntries = imported.filter(newEntry => 
                             newEntry.term && newEntry.translation &&
                             !TranslatorApp.state.glossary.some(existing => existing.term.toLowerCase() === newEntry.term.toLowerCase())
                         );
-
                         TranslatorApp.state.glossary = [...TranslatorApp.state.glossary, ...newEntries];
                         this.render();
                         TranslatorApp.state.hasUnsavedChanges = true;
                         TranslatorApp.ui.showAlert(`تم استيراد ${newEntries.length} مصطلح جديد.`, 'success');
                     } catch (e) {
-                        TranslatorApp.ui.showAlert('فشل استيراد القاموس. تأكد من أن الملف بصيغة JSON صحيحة.', 'error');
+                        TranslatorApp.ui.showAlert('فشل استيراد القاموس. تأكد من أن الملف بصيغة JSON أو CSV صحيحة.', 'error');
                     } finally {
                         TranslatorApp.dom.glossaryFileInput.value = '';
                     }
@@ -1728,14 +1745,19 @@
                 });
                 const result = await response.json();
                 if (result.success && Array.isArray(result.glossary)) {
-                    TranslatorApp.state.glossary = result.glossary.map(entry => ({
+                    // أضف فقط المصطلحات الجديدة غير المكررة
+                    const newEntries = result.glossary.filter(entry =>
+                        entry.term && entry.translation &&
+                        !TranslatorApp.state.glossary.some(existing => existing.term.toLowerCase() === entry.term.toLowerCase())
+                    ).map(entry => ({
                         term: entry.term,
                         translation: entry.translation,
                         category: subject
                     }));
+                    TranslatorApp.state.glossary = [...TranslatorApp.state.glossary, ...newEntries];
                     TranslatorApp.glossary.render();
                     TranslatorApp.state.hasUnsavedChanges = true;
-                    TranslatorApp.ui.showAlert('تم تحميل القاموس من الشيت بنجاح', 'success');
+                    TranslatorApp.ui.showAlert(`تم إضافة ${newEntries.length} مصطلح جديد من الشيت إلى القاموس.`, 'success');
                 } else {
                     TranslatorApp.ui.showAlert('لم يتم العثور على مصطلحات لهذه المادة أو حدث خطأ.', 'error');
                 }
