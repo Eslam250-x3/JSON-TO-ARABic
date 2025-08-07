@@ -367,6 +367,9 @@
 
 
     <script>
+        // --- إعداد Google Sheet ID ---
+        const GOOGLE_SHEET_ID = 'AKfycbzUGuESM-IhkKIG7aupf91Ia8cZSTqqt2Tj9QukUq9FAYvNOyyjYegJcv-wUp7DTFI'; // ← Google Sheet ID الفعلي
+
         const TranslatorApp = {
             // --- STATE ---
             state: {
@@ -1713,6 +1716,48 @@
         };
 
         document.addEventListener('DOMContentLoaded', () => TranslatorApp.init());
+
+        // --- دالة جلب القاموس من Google Sheet ---
+        async function fetchGlossaryFromSheet(subject) {
+            const url = TranslatorApp.dom.termbaseUrl.value;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sheetId: GOOGLE_SHEET_ID, subject })
+                });
+                const result = await response.json();
+                if (result.success && Array.isArray(result.glossary)) {
+                    TranslatorApp.state.glossary = result.glossary.map(entry => ({
+                        term: entry.term,
+                        translation: entry.translation,
+                        category: subject
+                    }));
+                    TranslatorApp.glossary.render();
+                    TranslatorApp.state.hasUnsavedChanges = true;
+                    TranslatorApp.ui.showAlert('تم تحميل القاموس من الشيت بنجاح', 'success');
+                } else {
+                    TranslatorApp.ui.showAlert('لم يتم العثور على مصطلحات لهذه المادة أو حدث خطأ.', 'error');
+                }
+            } catch (e) {
+                TranslatorApp.ui.showAlert('حدث خطأ أثناء جلب القاموس من الشيت', 'error');
+            }
+        }
+
+        // ... باقي كود TranslatorApp ...
+        // عدل دالة apply في TranslatorApp.subjects:
+        TranslatorApp.subjects.apply = async function() {
+            TranslatorApp.state.selectedSubject = TranslatorApp.dom.subjectSelect.value;
+            TranslatorApp.state.selectedGrade = TranslatorApp.dom.gradeSelect.value;
+            TranslatorApp.state.hasUnsavedChanges = true;
+            TranslatorApp.ui.showSubjectsModal(false);
+            TranslatorApp.ui.showAlert(
+                `تم تطبيق إعدادات: ${TranslatorApp.state.selectedSubject} - ${TranslatorApp.state.selectedGrade}`,
+                'success'
+            );
+            // جلب القاموس من الشيت بعد اختيار المادة
+            await fetchGlossaryFromSheet(TranslatorApp.state.selectedSubject);
+        };
     </script>
 </body>
 </html>
