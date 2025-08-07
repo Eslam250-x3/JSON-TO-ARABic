@@ -456,7 +456,7 @@
                 // Glossary Events
                 this.dom.manageGlossaryBtn.addEventListener('click', () => this.ui.showGlossaryModal(true));
                 this.dom.closeGlossaryModalBtn.addEventListener('click', () => this.ui.showGlossaryModal(false));
-                this.dom.addGlossaryTermBtn.addEventListener('click', this.glossary.add.bind(this));
+                this.dom.addGlossaryTermBtn.addEventListener('click', this.glossary.add.bind(this.glossary));
                 this.dom.exportGlossaryBtn.addEventListener('click', this.glossary.export.bind(this.glossary));
                 this.dom.importGlossaryBtn.addEventListener('click', () => this.dom.glossaryFileInput.click());
                 this.dom.glossaryFileInput.addEventListener('change', (e) => this.glossary.import(e.target.files[0]));
