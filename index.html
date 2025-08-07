@@ -368,7 +368,7 @@
 
     <script>
     // --- إعداد Google Sheet ID ---
-    const GOOGLE_SHEET_ID = '16-ant77j9ckFE7y48mOaqmMvUQrx8ZzM-ksWHaFNSUU'; // ← Google Sheet ID الفعلي
+           const GOOGLE_SHEET_ID = '16-ant77j9ckFE7y48mOaqmMvUQrx8ZzM-ksWHaFNSUU'; // ← Google Sheet ID الفعلي
 
     const TranslatorApp = {
         // --- STATE ---
@@ -654,10 +654,9 @@
                 }
             },
             clear() {
-                if(confirm('هل أنت متأكد أنك تريد بدء جلسة جديدة؟ سيتم حذف جميع البيانات الحالية وغير المحفوظة.')) {
-                    localStorage.removeItem('translatorSession');
-                    location.reload();
-                }
+                // *** FIXED: Removed the blocking confirm() dialog ***
+                localStorage.removeItem('translatorSession');
+                location.reload();
             }
         },
         
@@ -993,7 +992,6 @@
                 return this.data[subject].prompts[grade] || this.data[subject].prompts[Object.keys(this.data[subject].prompts)[0]] || '';
             },
 
-            // *** FIXED: Consolidated the 'apply' function into a single, correct async version. ***
             async apply() {
                 TranslatorApp.state.selectedSubject = TranslatorApp.dom.subjectSelect.value;
                 TranslatorApp.state.selectedGrade = TranslatorApp.dom.gradeSelect.value;
@@ -1815,9 +1813,12 @@
             }
             
         } catch (error) {
+            // *** FIXED: Improved error handling for CORS issue ***
             console.error('Fetch glossary error:', error);
-            let errorMessage = 'حدث خطأ أثناء جلب المصطلحات. قد يكون السبب مشكلة في الشبكة أو في خدمة Google Sheets. يمكنك إضافة المصطلحات يدوياً.';
-            TranslatorApp.ui.showAlert(errorMessage, 'error', 10000);
+            const corsMessage = `فشل جلب القاموس تلقائياً بسبب قيود أمان المتصفح (CORS). هذا أمر متوقع. سيتم فتح ملف Google Sheet في نافذة جديدة لتتمكن من نسخ المصطلحات وإضافتها يدوياً من خلال "إدارة القاموس المخصص".`;
+            TranslatorApp.ui.showAlert(corsMessage, 'error', 12000);
+            // Fallback: Open the sheet directly for the user to copy/paste
+            window.open(`https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/edit`, '_blank');
         }
     }
 
