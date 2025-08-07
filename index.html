@@ -367,1572 +367,1461 @@
 
 
     <script>
-       // --- إعداد Google Sheet ID ---
-const GOOGLE_SHEET_ID = '16-ant77j9ckFE7y48mOaqmMvUQrx8ZzM-ksWHaFNSUU'; // ← Google Sheet ID الفعلي
+    // --- إعداد Google Sheet ID ---
+    const GOOGLE_SHEET_ID = '16-ant77j9ckFE7y48mOaqmMvUQrx8ZzM-ksWHaFNSUU'; // ← Google Sheet ID الفعلي
 
-        const TranslatorApp = {
-            // --- STATE ---
-            state: {
-                selectedFilesInfo: [],
-                originalJsonData: [],
-                translatedJsonData: [],
-                glossary: [],
-                activeScreen: 'setup',
-                translationCache: new Map(),
-                startTime: null,
-                hasUnsavedChanges: false,
-                selectedSubject: 'None',
-                selectedGrade: 'None'
-            },
+    const TranslatorApp = {
+        // --- STATE ---
+        state: {
+            selectedFilesInfo: [],
+            originalJsonData: [],
+            translatedJsonData: [],
+            glossary: [],
+            activeScreen: 'setup',
+            translationCache: new Map(),
+            startTime: null,
+            hasUnsavedChanges: false,
+            selectedSubject: 'None',
+            selectedGrade: 'None'
+        },
 
-            // --- DOM ELEMENTS ---
-            dom: {},
+        // --- DOM ELEMENTS ---
+        dom: {},
 
-            // --- INITIALIZATION ---
-            init() {
-                this.cacheDomElements();
-                this.bindEvents();
-                this.theme.init();
-                this.history.init();
-                this.subjects.init();
-                this.session.load();
-                this.shortcuts.init();
-                this.autoSave.init();
-            },
+        // --- INITIALIZATION ---
+        init() {
+            this.cacheDomElements();
+            this.bindEvents();
+            this.theme.init();
+            this.history.init();
+            this.subjects.init();
+            this.session.load();
+            this.shortcuts.init();
+            this.autoSave.init();
+        },
 
-            cacheDomElements() {
-                const elementMap = {
-                    alertContainer: 'alertContainer', newSessionBtn: 'newSessionBtn',
-                    fileUpload: 'fileUpload', fileInput: 'fileInput', fileList: 'fileList',
-                    translateBtn: 'translateBtn', geminiKeyInput: 'geminiKey', chatgptKeyInput: 'chatgptKey',
-                    geminiKeyGroup: 'geminiKeyGroup', chatgptKeyGroup: 'chatgptKeyGroup',
-                    localModelGroup: 'localModelGroup', localModelUrl: 'localModelUrl', localModelName: 'localModelName',
-                    setupSection: 'setupSection', progressContainer: 'progressContainer', progressText: 'progressText',
-                    previewSection: 'previewSection', previewContainer: 'previewContainer', exportBtn: 'exportBtn',
-                    manageGlossaryBtn: 'manageGlossaryBtn', glossaryModal: 'glossaryModal',
-                    closeGlossaryModalBtn: 'closeGlossaryModalBtn', addGlossaryTermBtn: 'addGlossaryTermBtn',
-                    glossaryTermInput: 'glossaryTerm', glossaryTranslationInput: 'glossaryTranslation',
-                    glossaryListContainer: 'glossaryListContainer', useGlossaryCheckbox: 'useGlossaryCheckbox',
-                    themeToggle: 'theme-toggle', analyticsSection: 'analyticsSection',
-                    statsContainer: 'statsContainer', exportFormat: 'exportFormat',
-                    searchPreview: 'searchPreview', undoBtn: 'undoBtn', redoBtn: 'redoBtn',
-                    importGlossaryBtn: 'importGlossaryBtn', exportGlossaryBtn: 'exportGlossaryBtn',
-                    glossaryFileInput: 'glossaryFileInput', glossarySearch: 'glossarySearch',
-                    glossaryCategory: 'glossaryCategory',
-                    mappedIdsInput: 'mappedIdsInput', useMappedIdsCheckbox: 'useMappedIdsCheckbox',
-                    manageIdsBtn: 'manageIdsBtn', mappedIdsModal: 'mappedIdsModal',
-                    closeMappedIdsModalBtn: 'closeMappedIdsModalBtn',
-                    mappedIdsCount: 'mappedIdsCount', fetchMappedIdsBtn: 'fetchMappedIdsBtn',
-                    manageSubjectsBtn: 'manageSubjectsBtn', subjectsModal: 'subjectsModal',
-                    closeSubjectsModalBtn: 'closeSubjectsModalBtn', subjectSelect: 'subjectSelect',
-                    gradeSelect: 'gradeSelect', promptPreview: 'promptPreview', applyPromptBtn: 'applyPromptBtn'
-                };
-                for (const key in elementMap) { this.dom[key] = document.getElementById(elementMap[key]); }
-                this.dom.apiProviderRadios = document.querySelectorAll('input[name="apiProvider"]');
-            },
-            
-            // --- EVENTS ---
-            bindEvents() {
-                // Main App Events
-                this.dom.newSessionBtn.addEventListener('click', this.session.clear.bind(this));
-                this.dom.apiProviderRadios.forEach(radio => radio.addEventListener('change', this.events.onApiProviderChange.bind(this)));
-                this.dom.fileUpload.addEventListener('click', () => this.dom.fileInput.click());
-                this.dom.fileUpload.addEventListener('dragover', this.events.onDragOver);
-                this.dom.fileUpload.addEventListener('dragleave', this.events.onDragLeave);
-                this.dom.fileUpload.addEventListener('drop', this.events.onFileDrop.bind(this));
-                this.dom.fileInput.addEventListener('change', this.events.onFileSelect.bind(this));
-                this.dom.translateBtn.addEventListener('click', this.startTranslationProcess.bind(this));
-                this.dom.exportBtn.addEventListener('click', () => this.export.exportAs(this.dom.exportFormat.value));
-                this.dom.geminiKeyInput.addEventListener('input', () => this.state.hasUnsavedChanges = true);
-                this.dom.chatgptKeyInput.addEventListener('input', () => this.state.hasUnsavedChanges = true);
-                this.dom.localModelUrl.addEventListener('input', () => this.state.hasUnsavedChanges = true);
-                this.dom.localModelName.addEventListener('input', () => this.state.hasUnsavedChanges = true);
-                this.dom.themeToggle.addEventListener('click', this.theme.toggle.bind(this));
-                this.dom.mappedIdsInput.addEventListener('input', () => this.state.hasUnsavedChanges = true);
-                this.dom.useMappedIdsCheckbox.addEventListener('change', () => this.state.hasUnsavedChanges = true);
-                
-                // Preview Events
-                this.dom.searchPreview.addEventListener('input', this.preview.filter.bind(this.preview));
-                this.dom.undoBtn.addEventListener('click', this.history.undo.bind(this.history));
-                this.dom.redoBtn.addEventListener('click', this.history.redo.bind(this.history));
-
-                // Glossary Events
-                this.dom.manageGlossaryBtn.addEventListener('click', () => this.ui.showGlossaryModal(true));
-                this.dom.closeGlossaryModalBtn.addEventListener('click', () => this.ui.showGlossaryModal(false));
-                this.dom.addGlossaryTermBtn.addEventListener('click', this.glossary.add.bind(this));
-                this.dom.exportGlossaryBtn.addEventListener('click', this.glossary.export.bind(this.glossary));
-                this.dom.importGlossaryBtn.addEventListener('click', () => this.dom.glossaryFileInput.click());
-                this.dom.glossaryFileInput.addEventListener('change', (e) => this.glossary.import(e.target.files[0]));
-                this.dom.glossarySearch.addEventListener('input', (e) => this.glossary.filter(e.target.value));
-                
-                // Mapped IDs Events
-                this.dom.manageIdsBtn.addEventListener('click', () => this.ui.showMappedIdsModal(true));
-                this.dom.closeMappedIdsModalBtn.addEventListener('click', () => this.ui.showMappedIdsModal(false));
-                this.dom.fetchMappedIdsBtn.addEventListener('click', this.mappedIds.fetch.bind(this));
-
-                // Subjects Events
-                this.dom.manageSubjectsBtn.addEventListener('click', () => this.ui.showSubjectsModal(true));
-                this.dom.closeSubjectsModalBtn.addEventListener('click', () => this.ui.showSubjectsModal(false));
-                this.dom.subjectSelect.addEventListener('change', this.subjects.onSubjectChange.bind(this.subjects));
-                this.dom.gradeSelect.addEventListener('change', this.subjects.onGradeChange.bind(this.subjects));
-                this.dom.applyPromptBtn.addEventListener('click', this.subjects.apply.bind(this.subjects));
-            },
-            
-            events: {
-                onApiProviderChange(e) {
-                    const provider = e.target.value;
-                    this.dom.geminiKeyGroup.classList.toggle('hidden', provider !== 'gemini');
-                    this.dom.chatgptKeyGroup.classList.toggle('hidden', provider !== 'chatgpt');
-                    this.dom.localModelGroup.classList.toggle('hidden', provider !== 'local');
-                    this.state.hasUnsavedChanges = true;
-                },
-                onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); },
-                onDragLeave(e) { e.currentTarget.classList.remove('dragover'); },
-                onFileDrop(e) { e.preventDefault(); this.dom.fileUpload.classList.remove('dragover'); this.fileHandler.addFiles(e.dataTransfer.files); },
-                onFileSelect(e) { this.fileHandler.addFiles(e.target.files); }
-            },
-
-            // --- THEME MANAGEMENT ---
-            theme: {
-                init() {
-                    const savedTheme = localStorage.getItem('translatorTheme') || 'light';
-                    this.set(savedTheme);
-                },
-                toggle() {
-                    const currentTheme = document.documentElement.getAttribute('data-theme');
-                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                    this.set(newTheme);
-                },
-                set(themeName) {
-                    document.documentElement.setAttribute('data-theme', themeName);
-                    localStorage.setItem('translatorTheme', themeName);
-                    TranslatorApp.dom.themeToggle.textContent = themeName === 'dark' ? '☀️' : '🌙';
-                }
-            },
-
-            // --- SHORTCUTS ---
-            shortcuts: {
-                init() {
-                    document.addEventListener('keydown', (e) => {
-                        if (e.ctrlKey || e.metaKey) {
-                            switch(e.key.toLowerCase()) {
-                                case 's': 
-                                    e.preventDefault(); 
-                                    TranslatorApp.session.save();
-                                    TranslatorApp.ui.showAlert('تم حفظ الجلسة!', 'success', 2000);
-                                    break;
-                                case 'o': 
-                                    e.preventDefault(); 
-                                    TranslatorApp.dom.fileInput.click(); 
-                                    break;
-                                case 'enter': 
-                                    if(TranslatorApp.state.activeScreen === 'setup' && !e.target.closest('.ql-editor')) {
-                                        e.preventDefault(); 
-                                        TranslatorApp.dom.translateBtn.click();
-                                    }
-                                    break;
-                                case 'z':
-                                    e.preventDefault();
-                                    TranslatorApp.history.undo();
-                                    break;
-                                case 'y':
-                                    e.preventDefault();
-                                    TranslatorApp.history.redo();
-                                    break;
-                            }
-                        }
-                    });
-                }
-            },
-            
-            // --- SECURITY ---
-            security: {
-                SALT: "a-secure-static-salt-for-obfuscation",
-                encrypt(key) {
-                    try {
-                        return btoa(key + this.SALT);
-                    } catch {
-                        return '';
-                    }
-                },
-                decrypt(encryptedKey) {
-                    try {
-                        const decoded = atob(encryptedKey);
-                        if (decoded.endsWith(this.SALT)) {
-                            return decoded.slice(0, -this.SALT.length);
-                        }
-                        return ''; // Or handle as tampered key
-                    } catch {
-                        return '';
-                    }
-                },
-                sanitize(text) {
-                    if (typeof text !== 'string') return text;
-                    // This is a basic sanitizer. For production, a library like DOMPurify is recommended.
-                    return text.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-                }
-            },
-
-        // إصلاح دالة session.load لإزالة المرجع المعطل
-session: {
-    save() {
-        const sessionData = {
-            apiKeys: {
-                gemini: TranslatorApp.security.encrypt(TranslatorApp.dom.geminiKeyInput.value),
-                chatgpt: TranslatorApp.security.encrypt(TranslatorApp.dom.chatgptKeyInput.value),
-            },
-            localModelUrl: TranslatorApp.dom.localModelUrl.value,
-            localModelName: TranslatorApp.dom.localModelName.value,
-            selectedProvider: document.querySelector('input[name="apiProvider"]:checked').value,
-            selectedFilesInfo: TranslatorApp.state.selectedFilesInfo,
-            originalJsonData: TranslatorApp.state.originalJsonData,
-            translatedJsonData: TranslatorApp.state.translatedJsonData,
-            glossary: TranslatorApp.state.glossary,
-            activeScreen: TranslatorApp.state.activeScreen,
-            mappedIds: TranslatorApp.dom.mappedIdsInput.value,
-            useMappedIds: TranslatorApp.dom.useMappedIdsCheckbox.checked,
-            selectedSubject: TranslatorApp.state.selectedSubject,
-            selectedGrade: TranslatorApp.state.selectedGrade
-            // تم إزالة termbaseUrl لأنه غير موجود في الـ DOM
-        };
-        localStorage.setItem('translatorSession', JSON.stringify(sessionData));
-        TranslatorApp.state.hasUnsavedChanges = false;
-    },
-
-    load() {
-        const savedSession = localStorage.getItem('translatorSession');
-        if (!savedSession) return;
+        cacheDomElements() {
+            const elementMap = {
+                alertContainer: 'alertContainer', newSessionBtn: 'newSessionBtn',
+                fileUpload: 'fileUpload', fileInput: 'fileInput', fileList: 'fileList',
+                translateBtn: 'translateBtn', geminiKeyInput: 'geminiKey', chatgptKeyInput: 'chatgptKey',
+                geminiKeyGroup: 'geminiKeyGroup', chatgptKeyGroup: 'chatgptKeyGroup',
+                localModelGroup: 'localModelGroup', localModelUrl: 'localModelUrl', localModelName: 'localModelName',
+                setupSection: 'setupSection', progressContainer: 'progressContainer', progressText: 'progressText',
+                previewSection: 'previewSection', previewContainer: 'previewContainer', exportBtn: 'exportBtn',
+                manageGlossaryBtn: 'manageGlossaryBtn', glossaryModal: 'glossaryModal',
+                closeGlossaryModalBtn: 'closeGlossaryModalBtn', addGlossaryTermBtn: 'addGlossaryTermBtn',
+                glossaryTermInput: 'glossaryTerm', glossaryTranslationInput: 'glossaryTranslation',
+                glossaryListContainer: 'glossaryListContainer', useGlossaryCheckbox: 'useGlossaryCheckbox',
+                themeToggle: 'theme-toggle', analyticsSection: 'analyticsSection',
+                statsContainer: 'statsContainer', exportFormat: 'exportFormat',
+                searchPreview: 'searchPreview', undoBtn: 'undoBtn', redoBtn: 'redoBtn',
+                importGlossaryBtn: 'importGlossaryBtn', exportGlossaryBtn: 'exportGlossaryBtn',
+                glossaryFileInput: 'glossaryFileInput', glossarySearch: 'glossarySearch',
+                glossaryCategory: 'glossaryCategory',
+                mappedIdsInput: 'mappedIdsInput', useMappedIdsCheckbox: 'useMappedIdsCheckbox',
+                manageIdsBtn: 'manageIdsBtn', mappedIdsModal: 'mappedIdsModal',
+                closeMappedIdsModalBtn: 'closeMappedIdsModalBtn',
+                mappedIdsCount: 'mappedIdsCount', fetchMappedIdsBtn: 'fetchMappedIdsBtn',
+                manageSubjectsBtn: 'manageSubjectsBtn', subjectsModal: 'subjectsModal',
+                closeSubjectsModalBtn: 'closeSubjectsModalBtn', subjectSelect: 'subjectSelect',
+                gradeSelect: 'gradeSelect', promptPreview: 'promptPreview', applyPromptBtn: 'applyPromptBtn'
+            };
+            for (const key in elementMap) { this.dom[key] = document.getElementById(elementMap[key]); }
+            this.dom.apiProviderRadios = document.querySelectorAll('input[name="apiProvider"]');
+        },
         
-        try {
-            const sessionData = JSON.parse(savedSession);
+        // --- EVENTS ---
+        bindEvents() {
+            // Main App Events
+            this.dom.newSessionBtn.addEventListener('click', this.session.clear.bind(this));
+            this.dom.apiProviderRadios.forEach(radio => radio.addEventListener('change', this.events.onApiProviderChange.bind(this)));
+            this.dom.fileUpload.addEventListener('click', () => this.dom.fileInput.click());
+            this.dom.fileUpload.addEventListener('dragover', this.events.onDragOver);
+            this.dom.fileUpload.addEventListener('dragleave', this.events.onDragLeave);
+            this.dom.fileUpload.addEventListener('drop', this.events.onFileDrop.bind(this));
+            this.dom.fileInput.addEventListener('change', this.events.onFileSelect.bind(this));
+            this.dom.translateBtn.addEventListener('click', this.startTranslationProcess.bind(this));
+            this.dom.exportBtn.addEventListener('click', () => this.export.exportAs(this.dom.exportFormat.value));
+            this.dom.geminiKeyInput.addEventListener('input', () => this.state.hasUnsavedChanges = true);
+            this.dom.chatgptKeyInput.addEventListener('input', () => this.state.hasUnsavedChanges = true);
+            this.dom.localModelUrl.addEventListener('input', () => this.state.hasUnsavedChanges = true);
+            this.dom.localModelName.addEventListener('input', () => this.state.hasUnsavedChanges = true);
+            this.dom.themeToggle.addEventListener('click', this.theme.toggle.bind(this));
+            this.dom.mappedIdsInput.addEventListener('input', () => this.state.hasUnsavedChanges = true);
+            this.dom.useMappedIdsCheckbox.addEventListener('change', () => this.state.hasUnsavedChanges = true);
             
-            // استعادة القيم الأساسية
-            TranslatorApp.dom.geminiKeyInput.value = TranslatorApp.security.decrypt(sessionData.apiKeys?.gemini || '');
-            TranslatorApp.dom.chatgptKeyInput.value = TranslatorApp.security.decrypt(sessionData.apiKeys?.chatgpt || '');
-            TranslatorApp.dom.localModelUrl.value = sessionData.localModelUrl || 'http://localhost:11434/api/generate';
-            TranslatorApp.dom.localModelName.value = sessionData.localModelName || 'gemma:7b';
+            // Preview Events
+            this.dom.searchPreview.addEventListener('input', this.preview.filter.bind(this.preview));
+            this.dom.undoBtn.addEventListener('click', this.history.undo.bind(this.history));
+            this.dom.redoBtn.addEventListener('click', this.history.redo.bind(this.history));
+
+            // Glossary Events
+            this.dom.manageGlossaryBtn.addEventListener('click', () => this.ui.showGlossaryModal(true));
+            this.dom.closeGlossaryModalBtn.addEventListener('click', () => this.ui.showGlossaryModal(false));
+            this.dom.addGlossaryTermBtn.addEventListener('click', this.glossary.add.bind(this.glossary));
+            this.dom.exportGlossaryBtn.addEventListener('click', this.glossary.export.bind(this.glossary));
+            this.dom.importGlossaryBtn.addEventListener('click', () => this.dom.glossaryFileInput.click());
+            this.dom.glossaryFileInput.addEventListener('change', (e) => this.glossary.import(e.target.files[0]));
+            this.dom.glossarySearch.addEventListener('input', (e) => this.glossary.filter(e.target.value));
             
-            // استعادة حالة التطبيق
-            TranslatorApp.state.selectedFilesInfo = sessionData.selectedFilesInfo || [];
-            TranslatorApp.state.originalJsonData = sessionData.originalJsonData || [];
-            TranslatorApp.state.translatedJsonData = sessionData.translatedJsonData || [];
-            TranslatorApp.state.glossary = sessionData.glossary || [];
-            TranslatorApp.state.activeScreen = sessionData.activeScreen || 'setup';
-            TranslatorApp.dom.mappedIdsInput.value = sessionData.mappedIds || '[]';
-            TranslatorApp.dom.useMappedIdsCheckbox.checked = sessionData.useMappedIds || false;
-            TranslatorApp.state.selectedSubject = sessionData.selectedSubject || 'None';
-            TranslatorApp.state.selectedGrade = sessionData.selectedGrade || 'None';
-            
-            // استعادة مزود الخدمة المختار
-            if (sessionData.selectedProvider) {
-                const providerRadio = document.querySelector(`input[name="apiProvider"][value="${sessionData.selectedProvider}"]`);
-                if (providerRadio) {
-                    providerRadio.checked = true;
-                    TranslatorApp.events.onApiProviderChange({ target: { value: sessionData.selectedProvider } });
-                }
+            // Mapped IDs Events
+            this.dom.manageIdsBtn.addEventListener('click', () => this.ui.showMappedIdsModal(true));
+            this.dom.closeMappedIdsModalBtn.addEventListener('click', () => this.ui.showMappedIdsModal(false));
+            this.dom.fetchMappedIdsBtn.addEventListener('click', this.mappedIds.fetch.bind(this.mappedIds));
+
+            // Subjects Events
+            this.dom.manageSubjectsBtn.addEventListener('click', () => this.ui.showSubjectsModal(true));
+            this.dom.closeSubjectsModalBtn.addEventListener('click', () => this.ui.showSubjectsModal(false));
+            this.dom.subjectSelect.addEventListener('change', this.subjects.onSubjectChange.bind(this.subjects));
+            this.dom.gradeSelect.addEventListener('change', this.subjects.onGradeChange.bind(this.subjects));
+            this.dom.applyPromptBtn.addEventListener('click', this.subjects.apply.bind(this.subjects));
+        },
+        
+        events: {
+            onApiProviderChange(e) {
+                const provider = e.target.value;
+                this.dom.geminiKeyGroup.classList.toggle('hidden', provider !== 'gemini');
+                this.dom.chatgptKeyGroup.classList.toggle('hidden', provider !== 'chatgpt');
+                this.dom.localModelGroup.classList.toggle('hidden', provider !== 'local');
+                this.state.hasUnsavedChanges = true;
+            },
+            onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); },
+            onDragLeave(e) { e.currentTarget.classList.remove('dragover'); },
+            onFileDrop(e) { e.preventDefault(); this.dom.fileUpload.classList.remove('dragover'); this.fileHandler.addFiles(e.dataTransfer.files); },
+            onFileSelect(e) { this.fileHandler.addFiles(e.target.files); }
+        },
+
+        // --- THEME MANAGEMENT ---
+        theme: {
+            init() {
+                const savedTheme = localStorage.getItem('translatorTheme') || 'light';
+                this.set(savedTheme);
+            },
+            toggle() {
+                const currentTheme = document.documentElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                this.set(newTheme);
+            },
+            set(themeName) {
+                document.documentElement.setAttribute('data-theme', themeName);
+                localStorage.setItem('translatorTheme', themeName);
+                TranslatorApp.dom.themeToggle.textContent = themeName === 'dark' ? '☀️' : '🌙';
             }
-            
-            // تحديث الواجهة
-            TranslatorApp.ui.renderFileList();
-            TranslatorApp.glossary.render();
-            TranslatorApp.subjects.updateUI();
-            
-            // استعادة الشاشة النشطة
-            if (TranslatorApp.state.activeScreen === 'preview' && TranslatorApp.state.translatedJsonData.length > 0) {
-                TranslatorApp.ui.showScreen('preview');
-                TranslatorApp.preview.render();
-                const stats = TranslatorApp.statistics.calculate();
-                TranslatorApp.ui.renderStatistics(stats);
-                TranslatorApp.history.push(TranslatorApp.state.translatedJsonData);
-            } else {
-                TranslatorApp.ui.showScreen('setup');
+        },
+
+        // --- SHORTCUTS ---
+        shortcuts: {
+            init() {
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                        switch(e.key.toLowerCase()) {
+                            case 's': 
+                                e.preventDefault(); 
+                                TranslatorApp.session.save();
+                                TranslatorApp.ui.showAlert('تم حفظ الجلسة!', 'success', 2000);
+                                break;
+                            case 'o': 
+                                e.preventDefault(); 
+                                TranslatorApp.dom.fileInput.click(); 
+                                break;
+                            case 'enter': 
+                                if(TranslatorApp.state.activeScreen === 'setup' && !e.target.closest('.ql-editor')) {
+                                    e.preventDefault(); 
+                                    TranslatorApp.dom.translateBtn.click();
+                                }
+                                break;
+                            case 'z':
+                                e.preventDefault();
+                                TranslatorApp.history.undo();
+                                break;
+                            case 'y':
+                                e.preventDefault();
+                                TranslatorApp.history.redo();
+                                break;
+                        }
+                    }
+                });
             }
-            
-            TranslatorApp.ui.showAlert('تم استعادة الجلسة السابقة بنجاح.', 'success');
-            
-        } catch (error) {
-            console.error('خطأ في استعادة الجلسة:', error);
-            TranslatorApp.ui.showAlert('حدث خطأ أثناء استعادة الجلسة السابقة.', 'error');
-        }
-    },
-
-    clear() {
-        localStorage.removeItem('translatorSession');
-        location.reload();
-    }
-}
-             
-            
-            autoSave: {
-                init() {
-                    setInterval(() => {
-                        if (TranslatorApp.state.hasUnsavedChanges) {
-                            TranslatorApp.session.save();
-                            TranslatorApp.ui.showAlert('تم الحفظ التلقائي', 'info', 1500);
-                        }
-                    }, 10000); // Check for changes every 10 seconds
+        },
+        
+        // --- SECURITY ---
+        security: {
+            SALT: "a-secure-static-salt-for-obfuscation",
+            encrypt(key) {
+                try {
+                    return btoa(key + this.SALT);
+                } catch {
+                    return '';
                 }
             },
-
-            // --- VALIDATION ---
-            validation: {
-                validateJsonStructure(data, fileName) {
-                    const requiredFields = ['statement', 'parts'];
-                    const hasAllFields = requiredFields.every(field => data.hasOwnProperty(field));
-                    if (!hasAllFields) {
-                        throw new Error(`ملف ${fileName} يفتقد للحقول المطلوبة (statement, parts).`);
+            decrypt(encryptedKey) {
+                try {
+                    const decoded = atob(encryptedKey);
+                    if (decoded.endsWith(this.SALT)) {
+                        return decoded.slice(0, -this.SALT.length);
                     }
-                    return true;
-                },
-                validateApiKey(key, provider) {
-                    if (!key) return false;
-                    if (provider === 'gemini') return key.startsWith('AIza') && key.length > 30;
-                    if (provider === 'chatgpt') return key.startsWith('sk-') && key.length > 40;
-                    return false;
+                    return ''; // Or handle as tampered key
+                } catch {
+                    return '';
                 }
             },
+            sanitize(text) {
+                if (typeof text !== 'string') return text;
+                // This is a basic sanitizer. For production, a library like DOMPurify is recommended.
+                return text.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+            }
+        },
 
-            // --- FILE HANDLING ---
-            fileHandler: {
-                addFiles(files) {
-                    const fileList = Array.from(files).filter(f => f.name.endsWith('.json'));
-                    fileList.forEach(file => {
-                        if (!TranslatorApp.state.selectedFilesInfo.some(f => f.name === file.name)) {
-                            TranslatorApp.state.selectedFilesInfo.push({ name: file.name, size: file.size });
+        // --- SESSION MANAGEMENT ---
+        session: {
+            save() {
+                const sessionData = {
+                    apiKeys: {
+                        gemini: TranslatorApp.security.encrypt(TranslatorApp.dom.geminiKeyInput.value),
+                        chatgpt: TranslatorApp.security.encrypt(TranslatorApp.dom.chatgptKeyInput.value),
+                    },
+                    localModelUrl: TranslatorApp.dom.localModelUrl.value,
+                    localModelName: TranslatorApp.dom.localModelName.value,
+                    selectedProvider: document.querySelector('input[name="apiProvider"]:checked').value,
+                    selectedFilesInfo: TranslatorApp.state.selectedFilesInfo,
+                    originalJsonData: TranslatorApp.state.originalJsonData,
+                    translatedJsonData: TranslatorApp.state.translatedJsonData,
+                    glossary: TranslatorApp.state.glossary,
+                    activeScreen: TranslatorApp.state.activeScreen,
+                    mappedIds: TranslatorApp.dom.mappedIdsInput.value,
+                    useMappedIds: TranslatorApp.dom.useMappedIdsCheckbox.checked,
+                    selectedSubject: TranslatorApp.state.selectedSubject,
+                    selectedGrade: TranslatorApp.state.selectedGrade
+                };
+                localStorage.setItem('translatorSession', JSON.stringify(sessionData));
+                TranslatorApp.state.hasUnsavedChanges = false;
+            },
+            load() {
+                const savedSession = localStorage.getItem('translatorSession');
+                if (!savedSession) return;
+                
+                try {
+                    const sessionData = JSON.parse(savedSession);
+                    
+                    // Restore basic values
+                    TranslatorApp.dom.geminiKeyInput.value = TranslatorApp.security.decrypt(sessionData.apiKeys?.gemini || '');
+                    TranslatorApp.dom.chatgptKeyInput.value = TranslatorApp.security.decrypt(sessionData.apiKeys?.chatgpt || '');
+                    TranslatorApp.dom.localModelUrl.value = sessionData.localModelUrl || 'http://localhost:11434/api/generate';
+                    TranslatorApp.dom.localModelName.value = sessionData.localModelName || 'gemma:7b';
+                    
+                    // Restore app state
+                    TranslatorApp.state.selectedFilesInfo = sessionData.selectedFilesInfo || [];
+                    TranslatorApp.state.originalJsonData = sessionData.originalJsonData || [];
+                    TranslatorApp.state.translatedJsonData = sessionData.translatedJsonData || [];
+                    TranslatorApp.state.glossary = sessionData.glossary || [];
+                    TranslatorApp.state.activeScreen = sessionData.activeScreen || 'setup';
+                    TranslatorApp.dom.mappedIdsInput.value = sessionData.mappedIds || '[]';
+                    TranslatorApp.dom.useMappedIdsCheckbox.checked = sessionData.useMappedIds || false;
+                    TranslatorApp.state.selectedSubject = sessionData.selectedSubject || 'None';
+                    TranslatorApp.state.selectedGrade = sessionData.selectedGrade || 'None';
+                    
+                    // Restore selected provider
+                    if (sessionData.selectedProvider) {
+                        const providerRadio = document.querySelector(`input[name="apiProvider"][value="${sessionData.selectedProvider}"]`);
+                        if (providerRadio) {
+                            providerRadio.checked = true;
+                            TranslatorApp.events.onApiProviderChange({ target: { value: sessionData.selectedProvider } });
                         }
-                    });
+                    }
+                    
+                    // Update UI
                     TranslatorApp.ui.renderFileList();
-                    TranslatorApp.state.hasUnsavedChanges = true;
-                },
-                removeFile(index) {
-                    TranslatorApp.state.selectedFilesInfo.splice(index, 1);
-                    TranslatorApp.state.originalJsonData.splice(index, 1);
-                    TranslatorApp.state.translatedJsonData.splice(index, 1);
-                    TranslatorApp.ui.renderFileList();
-                    TranslatorApp.state.hasUnsavedChanges = true;
-                },
-                async readFilesFromInput() {
-                    const fileInputFiles = TranslatorApp.dom.fileInput.files;
-                    if (fileInputFiles.length === 0 && TranslatorApp.state.originalJsonData.length === 0) {
-                         throw new Error("الرجاء تحديد الملفات مرة أخرى لبدء الترجمة.");
-                    }
-                    TranslatorApp.state.originalJsonData = [];
-                    for (const fileInfo of TranslatorApp.state.selectedFilesInfo) {
-                       const file = Array.from(fileInputFiles).find(f => f.name === fileInfo.name);
-                       if(file) {
-                           const content = await file.text();
-                           const jsonData = JSON.parse(content);
-                           TranslatorApp.validation.validateJsonStructure(jsonData, file.name);
-                           TranslatorApp.state.originalJsonData.push({ name: file.name, data: jsonData });
-                       } else if (!TranslatorApp.state.originalJsonData.find(d => d.name === fileInfo.name)) {
-                           throw new Error(`لم يتم العثور على الملف ${fileInfo.name}. يرجى إعادة تحديده.`);
-                       }
-                    }
-                }
-            },
-            
-            // --- MAPPED IDS ---
-            mappedIds: {
-                async fetch() {
-                    const count = TranslatorApp.dom.mappedIdsCount.value;
-                    if (!count || count <= 0) {
-                        TranslatorApp.ui.showAlert('الرجاء إدخال عدد صحيح وموجب للمعّرفات.', 'error');
-                        return;
-                    }
+                    TranslatorApp.glossary.render();
+                    TranslatorApp.subjects.updateUI();
                     
-                    const url = `https://12digit.nagwa.com/get.bulk.codes/${count}/cps/cps.system/`;
-                    TranslatorApp.ui.showAlert(`جاري جلب ${count} كود...`, 'info', 3000);
-
-                    try {
-                        const response = await fetch(url);
-                        if (!response.ok) {
-                            throw new Error(`فشل الطلب. حالة الخادم: ${response.status}`);
-                        }
-                        const data = await response.json();
-                        
-                        if (Array.isArray(data)) {
-                            TranslatorApp.dom.mappedIdsInput.value = JSON.stringify(data, null, 2);
-                            TranslatorApp.ui.showAlert('تم جلب الأكواد بنجاح.', 'success');
-                            TranslatorApp.state.hasUnsavedChanges = true;
-                        } else {
-                            throw new Error('البيانات المستلمة ليست مصفوفة.');
-                        }
-                    } catch (error) {
-                        console.error("Fetch Mapped IDs Error:", error);
-                        TranslatorApp.ui.showAlert(`فشل الجلب التلقائي بسبب قيود أمان المتصفح (CORS). هذا أمر متوقع. سيتم الآن فتح الرابط في نافذة جديدة لتتمكن من نسخ الأكواد ولصقها يدوياً.`, 'error', 8000);
-                        window.open(url, '_blank');
-                    }
-                }
-            },
-
-            // --- GLOSSARY ---
-            glossary: {
-                add() {
-                    const term = TranslatorApp.dom.glossaryTermInput.value.trim();
-                    const translation = TranslatorApp.dom.glossaryTranslationInput.value.trim();
-                    if (!term || !translation) return TranslatorApp.ui.showAlert('يرجى إدخال المصطلح وترجمته.', 'error');
-                    if (TranslatorApp.state.glossary.some(e => e.term.toLowerCase() === term.toLowerCase())) return TranslatorApp.ui.showAlert('هذا المصطلح موجود بالفعل في القاموس.', 'error');
-                    
-                    TranslatorApp.state.glossary.push({ 
-                        term, 
-                        translation,
-                        category: TranslatorApp.dom.glossaryCategory.value,
-                        dateAdded: new Date().toISOString()
-                    });
-                    
-                    TranslatorApp.dom.glossaryTermInput.value = '';
-                    TranslatorApp.dom.glossaryTranslationInput.value = '';
-                    this.render();
-                    TranslatorApp.state.hasUnsavedChanges = true;
-                },
-                delete(index) {
-                    TranslatorApp.state.glossary.splice(index, 1);
-                    this.render();
-                    TranslatorApp.state.hasUnsavedChanges = true;
-                },
-                render(filteredList = null) {
-                    const list = filteredList || TranslatorApp.state.glossary;
-                    TranslatorApp.ui.renderGlossaryList(list);
-                },
-                filter(searchTerm) {
-                    const term = searchTerm.toLowerCase();
-                    const filtered = TranslatorApp.state.glossary.filter(entry => 
-                        entry.term.toLowerCase().includes(term) ||
-                        entry.translation.toLowerCase().includes(term)
-                    );
-                    this.render(filtered);
-                },
-                export() {
-                    if (TranslatorApp.state.glossary.length === 0) {
-                        return TranslatorApp.ui.showAlert('القاموس فارغ، لا يوجد شيء لتصديره.', 'error');
-                    }
-
-                    const escapeCSV = (str) => `"${(str || '').toString().replace(/"/g, '""')}"`;
-                    
-                    let csvContent = '"term","translation"\r\n';
-
-                    TranslatorApp.state.glossary.forEach(entry => {
-                        csvContent += `${escapeCSV(entry.term)},${escapeCSV(entry.translation)}\r\n`;
-                    });
-
-                    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'translator_glossary.csv';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    TranslatorApp.ui.showAlert('تم تصدير القاموس بنجاح كملف CSV.', 'success');
-                },
-                async import(file) {
-                    if (!file) return;
-                    try {
-                        const text = await file.text();
-                        let imported;
-                        // تحقق إذا كان الملف CSV أو JSON
-                        if (file.name.endsWith('.csv') || text.trim().startsWith('Term,')) {
-                            // معالجة CSV: توقع عمودين Term, Translated Term
-                            const lines = text.split(/\r?\n/).filter(line => line.trim());
-                            const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-                            const termIdx = header.findIndex(h => h.toLowerCase() === 'term');
-                            const transIdx = header.findIndex(h => h.toLowerCase().includes('translated'));
-                            if (termIdx === -1 || transIdx === -1) throw new Error('CSV يجب أن يحتوي على عمودين: Term, Translated Term');
-                            imported = lines.slice(1).map(line => {
-                                const cols = line.split(',').map(c => c.replace(/^"|"$/g, ''));
-                                return {
-                                    term: cols[termIdx],
-                                    translation: cols[transIdx]
-                                };
-                            }).filter(row => row.term && row.translation);
-                        } else {
-                            // معالجة JSON
-                            imported = JSON.parse(text);
-                        }
-                        if (!Array.isArray(imported)) throw new Error("الملف غير صالح.");
-                        const newEntries = imported.filter(newEntry => 
-                            newEntry.term && newEntry.translation &&
-                            !TranslatorApp.state.glossary.some(existing => existing.term.toLowerCase() === newEntry.term.toLowerCase())
-                        );
-                        TranslatorApp.state.glossary = [...TranslatorApp.state.glossary, ...newEntries];
-                        this.render();
-                        TranslatorApp.state.hasUnsavedChanges = true;
-                        TranslatorApp.ui.showAlert(`تم استيراد ${newEntries.length} مصطلح جديد.`, 'success');
-                    } catch (e) {
-                        TranslatorApp.ui.showAlert('فشل استيراد القاموس. تأكد من أن الملف بصيغة JSON أو CSV صحيحة.', 'error');
-                    } finally {
-                        TranslatorApp.dom.glossaryFileInput.value = '';
-                    }
-                },
-                apply(text) {
-                    const { glossary } = TranslatorApp.state;
-                    if (!text || !glossary || glossary.length === 0) return { modifiedText: text, placeholders: {} };
-                    let modifiedText = text;
-                    const placeholders = {};
-                    let placeholderIndex = 0;
-                    const sortedGlossary = [...glossary].sort((a, b) => b.term.length - a.term.length);
-                    sortedGlossary.forEach(entry => {
-                        const regex = new RegExp(`\\b${entry.term}\\b`, 'gi');
-                        modifiedText = modifiedText.replace(regex, () => {
-                            const placeholder = `__GLOSSARY_${placeholderIndex}__`;
-                            placeholders[placeholder] = entry.translation;
-                            placeholderIndex++;
-                            return placeholder;
-                        });
-                    });
-                    return { modifiedText, placeholders };
-                },
-                revert(text, placeholders) {
-                    if (!placeholders || Object.keys(placeholders).length === 0) return text;
-                    return Object.entries(placeholders).reduce((acc, [key, value]) => acc.replaceAll(key, value), text);
-                }
-            },
-            
-            // --- SUBJECTS & PROMPTS ---
-            subjects: {
-                data: {
-                    'None': { grades: ['None'], prompt: 'Translate the content accurately to Arabic while preserving any technical terms, formulas, or special formatting. It is very important to translate everything, including proper nouns, names, and titles, unless it is a placeholder like __GLOSSARY_0__.' },
-                    'Mathematics': {
-                        grades: ['Grades 1–3', 'Grades 4–7', 'Grades 8–12'],
-                        prompts: {
-                            'Grades 1–3': 'Task: Translate English Math questions for grades 1-3 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use Arabic numerals (١، ٢، +، −) and write equations using LaTeX Arabic-Compatible Version. All math variables (e.g., x, y, z) must be transliterated to their Arabic equivalents (س، ص، ع).\n3. Write fractions as \\dfrac{البسط}{المقام} (e.g., \\dfrac{١}{٤}).\n4. Use Modern Standard Arabic (MSA) only, with correct grammar and formal tone.',
-                            'Grades 4–7': 'Task: Translate English Math questions for grades 4-7 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0) and symbols throughout. Never use Arabic-Indic numerals.\n3. Translate abbreviated units of measure to their official Arabic abbreviations (e.g., cm to سم).\n4. Write fractions as \\dfrac{numerator}{denominator} (e.g., \\dfrac{1}{4}).\n5. Use Modern Standard Arabic (MSA) only, with correct grammar and formal tone.',
-                            'Grades 8–12': 'Task: Translate English Math questions for grades 8-12 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use Arabic numerals (١، ٢، +، −) and write equations using LaTeX Arabic-Compatible Version. All math variables (e.g., x, y, z) must be transliterated to their Arabic equivalents (س، ص، ع).\n3. Write fractions as \\dfrac{البسط}{المقام} (e.g., \\dfrac{١}{٤}).\n4. Use Modern Standard Arabic (MSA) only, with correct grammar and formal tone.'
-                        }
-                    },
-                    'Physics': {
-                        grades: ['Grades 10–12'],
-                        prompts: {
-                            'Grades 10–12': 'Task: Translate English Physics questions for grades 10-12 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0) and symbols. Never use Arabic-Indic numerals.\n3. Keep abbreviated units of measure (cm, m, kg) in English.\n4. Write fractions as \\dfrac{numerator}{denominator}.\n5. Ensure the entire output is formatted for right-to-left (RTL) display, including multiple-choice options.\n6. Keep all subscripted variables exactly as in the source (e.g., (\\rho_B)).'
-                        }
-                    },
-                    'Chemistry': {
-                        grades: ['Grades 10–12'],
-                        prompts: {
-                            'Grades 10–12': 'Task: Translate English Chemistry questions into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0) and symbols. Equations should remain in English, written from left to right.\n3. Keep abbreviated units of measure in English.\n4. Use Modern Standard Arabic (MSA) only.'
-                        }
-                    },
-                    'Biology': {
-                        grades: ['Grades 10–12'],
-                        prompts: {
-                            'Grades 10–12': 'Task: Translate English Biology questions into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0).\n3. Use Arabic symbols for labels (أ، ب، ج) and replace English letters (X, Y, Z) with their Arabic equivalents.\n4. Translate any text within figures.\n5. Use Modern Standard Arabic (MSA) only.'
-                        }
-                    },
-                    'Science': {
-                        grades: ['Grades 4–8', 'Grade 9'],
-                        prompts: {
-                            'Grades 4–8': 'Task: Translate English Science questions for grades 4-8 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0).\n3. Use Arabic symbols for labels (أ، ب، ج).\n4. Keep chemical symbols (Al3+) in English.\n5. Translate abbreviated units of measure to their official Arabic abbreviations.\n6. Use Modern Standard Arabic (MSA) only.',
-                            'Grade 9': 'Task: Translate English Science questions for grade 9 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use Arabic numerals (١، ٢، ٠). Never use English numerals.\n3. Use Arabic symbols for labels (أ، ب، ج).\n4. Keep chemical symbols (Al3+) in English.\n5. Translate abbreviated units of measure to their official Arabic abbreviations.\n6. Use Modern Standard Arabic (MSA) only.'
-                        }
-                    },
-                    'Integrated Science': {
-                        grades: ['Grades 10–12'],
-                        prompts: {
-                            'Grades 10–12': 'Task: Translate English Integrated Science questions into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0).\n3. Use Arabic symbols for labels (أ، ب، ج).\n4. Keep abbreviated units of measure in English.\n5. Translate any text within figures.\n6. Use Modern Standard Arabic (MSA) only.'
-                        }
-                    },
-                    'ICT': {
-                        grades: ['Grade 4', 'Grade 5'],
-                        prompts: {
-                            'Grade 4': 'Task: Translate English ICT questions for grade 4 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use Arabic numerals (١، ٢، ٠).\n3. Product names (like Whatsapp) should be in bilingual format.\n4. Use Modern Standard Arabic (MSA) only.',
-                            'Grade 5': 'Task: Translate English ICT questions for grade 5 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0).\n3. Use Arabic symbols for labels (أ، ب، ج).\n4. Use Modern Standard Arabic (MSA) only.'
-                        }
-                    }
-                },
-
-                init() {
-                    this.populateSubjects();
-                    this.updateUI();
-                },
-
-                populateSubjects() {
-                    TranslatorApp.dom.subjectSelect.innerHTML = '';
-                    Object.keys(this.data).forEach(subject => {
-                        const option = document.createElement('option');
-                        option.value = subject;
-                        option.textContent = subject;
-                        TranslatorApp.dom.subjectSelect.appendChild(option);
-                    });
-                },
-
-                populateGrades(subject) {
-                    TranslatorApp.dom.gradeSelect.innerHTML = '';
-                    const subjectData = this.data[subject];
-                    if (subjectData && subjectData.grades) {
-                        subjectData.grades.forEach(grade => {
-                            const option = document.createElement('option');
-                            option.value = grade;
-                            option.textContent = grade;
-                            TranslatorApp.dom.gradeSelect.appendChild(option);
-                        });
-                    }
-                },
-
-                onSubjectChange() {
-                    const selectedSubject = TranslatorApp.dom.subjectSelect.value;
-                    this.populateGrades(selectedSubject);
-                    this.updatePromptPreview();
-                },
-
-                onGradeChange() {
-                    this.updatePromptPreview();
-                },
-
-                updatePromptPreview() {
-                    const prompt = this.getCurrentPrompt();
-                    TranslatorApp.dom.promptPreview.value = prompt;
-                },
-
-                getCurrentPrompt() {
-                    const subject = TranslatorApp.dom.subjectSelect.value;
-                    const grade = TranslatorApp.dom.gradeSelect.value;
-                    
-                    if (subject === 'None' || !this.data[subject]) {
-                        return this.data['None'].prompt;
-                    }
-
-                    return this.data[subject].prompts[grade] || this.data[subject].prompts[Object.keys(this.data[subject].prompts)[0]] || '';
-                },
-
-                apply() {
-                    TranslatorApp.state.selectedSubject = TranslatorApp.dom.subjectSelect.value;
-                    TranslatorApp.state.selectedGrade = TranslatorApp.dom.gradeSelect.value;
-                    TranslatorApp.state.hasUnsavedChanges = true;
-                    TranslatorApp.ui.showSubjectsModal(false);
-                    TranslatorApp.ui.showAlert(
-                        `تم تطبيق إعدادات: ${TranslatorApp.state.selectedSubject} - ${TranslatorApp.state.selectedGrade}`, 
-                        'success'
-                    );
-                },
-
-                updateUI() {
-                    TranslatorApp.dom.subjectSelect.value = TranslatorApp.state.selectedSubject;
-                    this.populateGrades(TranslatorApp.state.selectedSubject);
-                    TranslatorApp.dom.gradeSelect.value = TranslatorApp.state.selectedGrade;
-                    this.updatePromptPreview();
-                }
-            },
-
-            // --- API & TRANSLATION ---
-            api: {
-                async translateWithRetry(texts, apiKeyOrUrl, provider, maxRetries = 3, localModelName = '', systemPrompt = '') {
-                    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                        try {
-                            TranslatorApp.ui.updateProgress(`جاري الترجمة... (المحاولة ${attempt}/${maxRetries})`);
-                            return await this.translateBatch(texts, apiKeyOrUrl, provider, localModelName, systemPrompt);
-                        } catch (error) {
-                            console.error(`Attempt ${attempt} failed:`, error);
-                            if (attempt === maxRetries) throw error;
-                            await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
-                        }
-                    }
-                },
-                async translateBatch(texts, apiKeyOrUrl, provider, localModelName = '', systemPrompt = '') {
-                    const BATCH_SEPARATOR = "\n|||---|||\n";
-                    const CONTEXT_SEPARATOR = "\n<SEP>\n";
-                    
-                    const userPrompt = `You will receive a batch of texts separated by "${BATCH_SEPARATOR}". Some of these texts might contain internal separators like "${CONTEXT_SEPARATOR}". If a text contains "${CONTEXT_SEPARATOR}", it represents a question's stem followed by its answer choices. Translate the stem and each choice individually to Arabic, but maintain their relationship and the "${CONTEXT_SEPARATOR}" separators in the output. For texts without "${CONTEXT_SEPARATOR}", translate them as single units. Keep any HTML tags or LaTeX equations unchanged.\n\n${texts.join(BATCH_SEPARATOR)}`;
-                    
-                    let responseText;
-                    if (provider === 'gemini') {
-                        responseText = await this.withGemini(systemPrompt, userPrompt, apiKeyOrUrl);
-                    } else if (provider === 'chatgpt') {
-                        responseText = await this.withChatGPT(systemPrompt, userPrompt, apiKeyOrUrl);
+                    // Restore active screen
+                    if (TranslatorApp.state.activeScreen === 'preview' && TranslatorApp.state.translatedJsonData.length > 0) {
+                        TranslatorApp.ui.showScreen('preview');
+                        TranslatorApp.preview.render();
+                        const stats = TranslatorApp.statistics.calculate();
+                        TranslatorApp.ui.renderStatistics(stats);
+                        TranslatorApp.history.push(TranslatorApp.state.translatedJsonData);
                     } else {
-                        responseText = await this.withLocalModel(systemPrompt, userPrompt, apiKeyOrUrl, localModelName);
+                        TranslatorApp.ui.showScreen('setup');
                     }
                     
-                    const translatedTexts = responseText.split(BATCH_SEPARATOR.trim());
-                    if (translatedTexts.length !== texts.length) {
-                        console.error("Mismatch in translated texts count.", { sent: texts.length, received: translatedTexts.length });
-                        throw new Error("حدث خطأ أثناء معالجة الترجمة المجمعة، عدد النصوص المترجمة لا يتطابق.");
-                    }
-                    return translatedTexts.map(t => t.trim());
-                },
-                async withGemini(systemPrompt, userPrompt, apiKey) {
-                    const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${userPrompt}` : userPrompt;
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                    const response = await fetch(apiUrl, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] })
-                    });
-                    if (!response.ok) { const err = await response.json(); throw new Error(`Gemini API Error: ${err.error?.message || response.statusText}`); }
-                    const data = await response.json();
-                    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                },
-                async withChatGPT(systemPrompt, userPrompt, apiKey) {
-                    const apiUrl = 'https://api.openai.com/v1/chat/completions';
-                    const messages = [];
-                    if (systemPrompt) {
-                        messages.push({ role: 'system', content: systemPrompt });
-                    }
-                    messages.push({ role: 'user', content: userPrompt });
-
-                    const response = await fetch(apiUrl, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                        body: JSON.stringify({
-                            model: 'gpt-4o',
-                            messages: messages,
-                            temperature: 0.3
-                        })
-                    });
-                    if (!response.ok) { const err = await response.json(); throw new Error(`ChatGPT API Error: ${err.error?.message || response.statusText}`); }
-                    const data = await response.json();
-                    return data.choices?.[0]?.message?.content || '';
-                },
-                async withLocalModel(systemPrompt, userPrompt, url, modelName) {
-                    try {
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                model: modelName,
-                                prompt: userPrompt,
-                                system: systemPrompt,
-                                stream: false
-                            })
-                        });
-                        if (!response.ok) {
-                            throw new Error(`Local server error: ${response.status} ${response.statusText}`);
-                        }
-                        const data = await response.json();
-                        return data.response || '';
-                    } catch (error) {
-                        console.error("Local model fetch error:", error);
-                        throw new Error("فشل الاتصال بالنموذج المحلي. تأكد من أن الخادم يعمل وأن العنوان صحيح.");
-                    }
+                    TranslatorApp.ui.showAlert('تم استعادة الجلسة السابقة بنجاح.', 'success');
+                    
+                } catch (error) {
+                    console.error('خطأ في استعادة الجلسة:', error);
+                    TranslatorApp.ui.showAlert('حدث خطأ أثناء استعادة الجلسة السابقة.', 'error');
                 }
             },
-            
-            // --- HISTORY (UNDO/REDO) ---
-            history: {
-                stack: [],
-                currentIndex: -1,
-                init() {
-                    this.updateButtons();
-                },
-                push(state) {
-                    // Debounce pushing to history
-                    if (this.timeout) clearTimeout(this.timeout);
-                    this.timeout = setTimeout(() => {
-                        this.stack = this.stack.slice(0, this.currentIndex + 1);
-                        this.stack.push(JSON.parse(JSON.stringify(state)));
-                        this.currentIndex++;
-                        this.updateButtons();
-                    }, 500); // Push state only after 500ms of inactivity
-                },
-                undo() {
-                    if (this.currentIndex > 0) {
-                        this.currentIndex--;
-                        this.restore(this.stack[this.currentIndex]);
-                    }
-                },
-                redo() {
-                    if (this.currentIndex < this.stack.length - 1) {
-                        this.currentIndex++;
-                        this.restore(this.stack[this.currentIndex]);
-                    }
-                },
-                restore(state) {
-                    TranslatorApp.state.translatedJsonData = JSON.parse(JSON.stringify(state));
-                    TranslatorApp.preview.render();
-                    this.updateButtons();
-                    TranslatorApp.state.hasUnsavedChanges = true;
-                },
-                updateButtons() {
-                    TranslatorApp.dom.undoBtn.disabled = this.currentIndex <= 0;
-                    TranslatorApp.dom.redoBtn.disabled = this.currentIndex >= this.stack.length - 1;
+            clear() {
+                if(confirm('هل أنت متأكد أنك تريد بدء جلسة جديدة؟ سيتم حذف جميع البيانات الحالية وغير المحفوظة.')) {
+                    localStorage.removeItem('translatorSession');
+                    location.reload();
                 }
+            }
+        },
+        
+        autoSave: {
+            init() {
+                setInterval(() => {
+                    if (TranslatorApp.state.hasUnsavedChanges) {
+                        TranslatorApp.session.save();
+                        TranslatorApp.ui.showAlert('تم الحفظ التلقائي', 'info', 1500);
+                    }
+                }, 10000); // Check for changes every 10 seconds
+            }
+        },
+
+        // --- VALIDATION ---
+        validation: {
+            validateJsonStructure(data, fileName) {
+                const requiredFields = ['statement', 'parts'];
+                const hasAllFields = requiredFields.every(field => data.hasOwnProperty(field));
+                if (!hasAllFields) {
+                    throw new Error(`ملف ${fileName} يفتقد للحقول المطلوبة (statement, parts).`);
+                }
+                return true;
             },
+            validateApiKey(key, provider) {
+                if (!key) return false;
+                if (provider === 'gemini') return key.startsWith('AIza') && key.length > 30;
+                if (provider === 'chatgpt') return key.startsWith('sk-') && key.length > 40;
+                return false;
+            }
+        },
 
-            // --- MAIN PROCESS ---
-            async startTranslationProcess() {
-                const apiProvider = document.querySelector('input[name="apiProvider"]:checked').value;
-                let apiKeyOrUrl;
-                let localModelName;
-
-                if (apiProvider === 'gemini') {
-                    apiKeyOrUrl = this.dom.geminiKeyInput.value.trim();
-                    if (!this.validation.validateApiKey(apiKeyOrUrl, 'gemini')) return this.ui.showAlert(`مفتاح API لـ Gemini غير صالح.`, 'error');
-                } else if (apiProvider === 'chatgpt') {
-                    apiKeyOrUrl = this.dom.chatgptKeyInput.value.trim();
-                    if (!this.validation.validateApiKey(apiKeyOrUrl, 'chatgpt')) return this.ui.showAlert(`مفتاح API لـ ChatGPT غير صالح.`, 'error');
-                } else { // local model
-                    apiKeyOrUrl = this.dom.localModelUrl.value.trim();
-                    localModelName = this.dom.localModelName.value.trim();
-                    if (!apiKeyOrUrl || !localModelName) return this.ui.showAlert('الرجاء إدخال عنوان URL واسم النموذج المحلي.', 'error');
+        // --- FILE HANDLING ---
+        fileHandler: {
+            addFiles(files) {
+                const fileList = Array.from(files).filter(f => f.name.endsWith('.json'));
+                fileList.forEach(file => {
+                    if (!TranslatorApp.state.selectedFilesInfo.some(f => f.name === file.name)) {
+                        TranslatorApp.state.selectedFilesInfo.push({ name: file.name, size: file.size });
+                    }
+                });
+                TranslatorApp.ui.renderFileList();
+                TranslatorApp.state.hasUnsavedChanges = true;
+            },
+            removeFile(index) {
+                TranslatorApp.state.selectedFilesInfo.splice(index, 1);
+                TranslatorApp.state.originalJsonData.splice(index, 1);
+                TranslatorApp.state.translatedJsonData.splice(index, 1);
+                TranslatorApp.ui.renderFileList();
+                TranslatorApp.state.hasUnsavedChanges = true;
+            },
+            async readFilesFromInput() {
+                const fileInputFiles = TranslatorApp.dom.fileInput.files;
+                if (fileInputFiles.length === 0 && TranslatorApp.state.originalJsonData.length === 0) {
+                     throw new Error("الرجاء تحديد الملفات مرة أخرى لبدء الترجمة.");
+                }
+                TranslatorApp.state.originalJsonData = [];
+                for (const fileInfo of TranslatorApp.state.selectedFilesInfo) {
+                   const file = Array.from(fileInputFiles).find(f => f.name === fileInfo.name);
+                   if(file) {
+                       const content = await file.text();
+                       const jsonData = JSON.parse(content);
+                       TranslatorApp.validation.validateJsonStructure(jsonData, file.name);
+                       TranslatorApp.state.originalJsonData.push({ name: file.name, data: jsonData });
+                   } else if (!TranslatorApp.state.originalJsonData.find(d => d.name === fileInfo.name)) {
+                       throw new Error(`لم يتم العثور على الملف ${fileInfo.name}. يرجى إعادة تحديده.`);
+                   }
+                }
+            }
+        },
+        
+        // --- MAPPED IDS ---
+        mappedIds: {
+            async fetch() {
+                const count = TranslatorApp.dom.mappedIdsCount.value;
+                if (!count || count <= 0) {
+                    TranslatorApp.ui.showAlert('الرجاء إدخال عدد صحيح وموجب للمعّرفات.', 'error');
+                    return;
                 }
                 
-                if (this.state.selectedFilesInfo.length === 0) return this.ui.showAlert('الرجاء اختيار ملف JSON واحد على الأقل.', 'error');
-
-                this.ui.showScreen('progress');
-                this.dom.translateBtn.disabled = true;
-                this.state.translationCache.clear();
-                this.state.startTime = Date.now();
+                const url = `https://12digit.nagwa.com/get.bulk.codes/${count}/cps/cps.system/`;
+                TranslatorApp.ui.showAlert(`جاري جلب ${count} كود...`, 'info', 3000);
 
                 try {
-                    this.ui.updateProgress('جاري قراءة الملفات...');
-                    await this.fileHandler.readFilesFromInput();
-                    this.state.translatedJsonData = JSON.parse(JSON.stringify(this.state.originalJsonData));
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`فشل الطلب. حالة الخادم: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    if (Array.isArray(data)) {
+                        TranslatorApp.dom.mappedIdsInput.value = JSON.stringify(data, null, 2);
+                        TranslatorApp.ui.showAlert('تم جلب الأكواد بنجاح.', 'success');
+                        TranslatorApp.state.hasUnsavedChanges = true;
+                    } else {
+                        throw new Error('البيانات المستلمة ليست مصفوفة.');
+                    }
+                } catch (error) {
+                    console.error("Fetch Mapped IDs Error:", error);
+                    TranslatorApp.ui.showAlert(`فشل الجلب التلقائي بسبب قيود أمان المتصفح (CORS). هذا أمر متوقع. سيتم الآن فتح الرابط في نافذة جديدة لتتمكن من نسخ الأكواد ولصقها يدوياً.`, 'error', 8000);
+                    window.open(url, '_blank');
+                }
+            }
+        },
 
-                    this.ui.updateProgress('جاري تجميع النصوص للترجمة...');
-                    const translationJobs = [];
-                    const useGlossary = this.dom.useGlossaryCheckbox.checked;
-                    const CONTEXT_SEPARATOR = "\n<SEP>\n";
+        // --- GLOSSARY ---
+        glossary: {
+            add() {
+                const term = TranslatorApp.dom.glossaryTermInput.value.trim();
+                const translation = TranslatorApp.dom.glossaryTranslationInput.value.trim();
+                if (!term || !translation) return TranslatorApp.ui.showAlert('يرجى إدخال المصطلح وترجمته.', 'error');
+                if (TranslatorApp.state.glossary.some(e => e.term.toLowerCase() === term.toLowerCase())) return TranslatorApp.ui.showAlert('هذا المصطلح موجود بالفعل في القاموس.', 'error');
+                
+                TranslatorApp.state.glossary.push({ 
+                    term, 
+                    translation,
+                    category: TranslatorApp.dom.glossaryCategory.value,
+                    dateAdded: new Date().toISOString()
+                });
+                
+                TranslatorApp.dom.glossaryTermInput.value = '';
+                TranslatorApp.dom.glossaryTranslationInput.value = '';
+                this.render();
+                TranslatorApp.state.hasUnsavedChanges = true;
+            },
+            delete(index) {
+                TranslatorApp.state.glossary.splice(index, 1);
+                this.render();
+                TranslatorApp.state.hasUnsavedChanges = true;
+            },
+            render(filteredList = null) {
+                const list = filteredList || TranslatorApp.state.glossary;
+                TranslatorApp.ui.renderGlossaryList(list);
+            },
+            filter(searchTerm) {
+                const term = searchTerm.toLowerCase();
+                const filtered = TranslatorApp.state.glossary.filter(entry => 
+                    entry.term.toLowerCase().includes(term) ||
+                    entry.translation.toLowerCase().includes(term)
+                );
+                this.render(filtered);
+            },
+            export() {
+                if (TranslatorApp.state.glossary.length === 0) {
+                    return TranslatorApp.ui.showAlert('القاموس فارغ، لا يوجد شيء لتصديره.', 'error');
+                }
 
-                    this.state.originalJsonData.forEach((file, fileIndex) => {
-                        // Handle statement
-                        if (file.data.statement) {
-                            const { modifiedText, placeholders } = useGlossary ? this.glossary.apply(file.data.statement) : { modifiedText: file.data.statement, placeholders: {} };
+                const escapeCSV = (str) => `"${(str || '').toString().replace(/"/g, '""')}"`;
+                
+                let csvContent = '"term","translation"\r\n';
+
+                TranslatorApp.state.glossary.forEach(entry => {
+                    csvContent += `${escapeCSV(entry.term)},${escapeCSV(entry.translation)}\r\n`;
+                });
+
+                const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'translator_glossary.csv';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                TranslatorApp.ui.showAlert('تم تصدير القاموس بنجاح كملف CSV.', 'success');
+            },
+            async import(file) {
+                if (!file) return;
+                try {
+                    const text = await file.text();
+                    let imported;
+                    // Check if file is CSV or JSON
+                    if (file.name.endsWith('.csv') || text.trim().startsWith('Term,')) {
+                        // Process CSV: expect 'Term' and 'Translated Term' columns
+                        const lines = text.split(/\r?\n/).filter(line => line.trim());
+                        const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+                        const termIdx = header.findIndex(h => h.toLowerCase() === 'term');
+                        const transIdx = header.findIndex(h => h.toLowerCase().includes('translated'));
+                        if (termIdx === -1 || transIdx === -1) throw new Error('CSV must have "Term" and "Translated Term" columns.');
+                        imported = lines.slice(1).map(line => {
+                            const cols = line.split(',').map(c => c.replace(/^"|"$/g, ''));
+                            return {
+                                term: cols[termIdx],
+                                translation: cols[transIdx]
+                            };
+                        }).filter(row => row.term && row.translation);
+                    } else {
+                        // Process JSON
+                        imported = JSON.parse(text);
+                    }
+                    if (!Array.isArray(imported)) throw new Error("Invalid file format.");
+                    const newEntries = imported.filter(newEntry => 
+                        newEntry.term && newEntry.translation &&
+                        !TranslatorApp.state.glossary.some(existing => existing.term.toLowerCase() === newEntry.term.toLowerCase())
+                    );
+                    TranslatorApp.state.glossary = [...TranslatorApp.state.glossary, ...newEntries];
+                    this.render();
+                    TranslatorApp.state.hasUnsavedChanges = true;
+                    TranslatorApp.ui.showAlert(`تم استيراد ${newEntries.length} مصطلح جديد.`, 'success');
+                } catch (e) {
+                    TranslatorApp.ui.showAlert('فشل استيراد القاموس. تأكد من أن الملف بصيغة JSON أو CSV صحيحة.', 'error');
+                } finally {
+                    TranslatorApp.dom.glossaryFileInput.value = '';
+                }
+            },
+            apply(text) {
+                const { glossary } = TranslatorApp.state;
+                if (!text || !glossary || glossary.length === 0) return { modifiedText: text, placeholders: {} };
+                let modifiedText = text;
+                const placeholders = {};
+                let placeholderIndex = 0;
+                const sortedGlossary = [...glossary].sort((a, b) => b.term.length - a.term.length);
+                sortedGlossary.forEach(entry => {
+                    const regex = new RegExp(`\\b${entry.term}\\b`, 'gi');
+                    modifiedText = modifiedText.replace(regex, () => {
+                        const placeholder = `__GLOSSARY_${placeholderIndex}__`;
+                        placeholders[placeholder] = entry.translation;
+                        placeholderIndex++;
+                        return placeholder;
+                    });
+                });
+                return { modifiedText, placeholders };
+            },
+            revert(text, placeholders) {
+                if (!placeholders || Object.keys(placeholders).length === 0) return text;
+                return Object.entries(placeholders).reduce((acc, [key, value]) => acc.replaceAll(key, value), text);
+            }
+        },
+        
+        // --- SUBJECTS & PROMPTS ---
+        subjects: {
+            data: {
+                'None': { grades: ['None'], prompt: 'Translate the content accurately to Arabic while preserving any technical terms, formulas, or special formatting. It is very important to translate everything, including proper nouns, names, and titles, unless it is a placeholder like __GLOSSARY_0__.' },
+                'Mathematics': {
+                    grades: ['Grades 1–3', 'Grades 4–7', 'Grades 8–12'],
+                    prompts: {
+                        'Grades 1–3': 'Task: Translate English Math questions for grades 1-3 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use Arabic numerals (١، ٢، +، −) and write equations using LaTeX Arabic-Compatible Version. All math variables (e.g., x, y, z) must be transliterated to their Arabic equivalents (س، ص، ع).\n3. Write fractions as \\dfrac{البسط}{المقام} (e.g., \\dfrac{١}{٤}).\n4. Use Modern Standard Arabic (MSA) only, with correct grammar and formal tone.',
+                        'Grades 4–7': 'Task: Translate English Math questions for grades 4-7 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0) and symbols throughout. Never use Arabic-Indic numerals.\n3. Translate abbreviated units of measure to their official Arabic abbreviations (e.g., cm to سم).\n4. Write fractions as \\dfrac{numerator}{denominator} (e.g., \\dfrac{1}{4}).\n5. Use Modern Standard Arabic (MSA) only, with correct grammar and formal tone.',
+                        'Grades 8–12': 'Task: Translate English Math questions for grades 8-12 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use Arabic numerals (١، ٢، +، −) and write equations using LaTeX Arabic-Compatible Version. All math variables (e.g., x, y, z) must be transliterated to their Arabic equivalents (س، ص، ع).\n3. Write fractions as \\dfrac{البسط}{المقام} (e.g., \\dfrac{١}{٤}).\n4. Use Modern Standard Arabic (MSA) only, with correct grammar and formal tone.'
+                    }
+                },
+                'Physics': {
+                    grades: ['Grades 10–12'],
+                    prompts: {
+                        'Grades 10–12': 'Task: Translate English Physics questions for grades 10-12 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0) and symbols. Never use Arabic-Indic numerals.\n3. Keep abbreviated units of measure (cm, m, kg) in English.\n4. Write fractions as \\dfrac{numerator}{denominator}.\n5. Ensure the entire output is formatted for right-to-left (RTL) display, including multiple-choice options.\n6. Keep all subscripted variables exactly as in the source (e.g., (\\rho_B)).'
+                    }
+                },
+                'Chemistry': {
+                    grades: ['Grades 10–12'],
+                    prompts: {
+                        'Grades 10–12': 'Task: Translate English Chemistry questions into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0) and symbols. Equations should remain in English, written from left to right.\n3. Keep abbreviated units of measure in English.\n4. Use Modern Standard Arabic (MSA) only.'
+                    }
+                },
+                'Biology': {
+                    grades: ['Grades 10–12'],
+                    prompts: {
+                        'Grades 10–12': 'Task: Translate English Biology questions into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0).\n3. Use Arabic symbols for labels (أ، ب، ج) and replace English letters (X, Y, Z) with their Arabic equivalents.\n4. Translate any text within figures.\n5. Use Modern Standard Arabic (MSA) only.'
+                    }
+                },
+                'Science': {
+                    grades: ['Grades 4–8', 'Grade 9'],
+                    prompts: {
+                        'Grades 4–8': 'Task: Translate English Science questions for grades 4-8 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0).\n3. Use Arabic symbols for labels (أ، ب، ج).\n4. Keep chemical symbols (Al3+) in English.\n5. Translate abbreviated units of measure to their official Arabic abbreviations.\n6. Use Modern Standard Arabic (MSA) only.',
+                        'Grade 9': 'Task: Translate English Science questions for grade 9 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use Arabic numerals (١، ٢، ٠). Never use English numerals.\n3. Use Arabic symbols for labels (أ، ب، ج).\n4. Keep chemical symbols (Al3+) in English.\n5. Translate abbreviated units of measure to their official Arabic abbreviations.\n6. Use Modern Standard Arabic (MSA) only.'
+                    }
+                },
+                'Integrated Science': {
+                    grades: ['Grades 10–12'],
+                    prompts: {
+                        'Grades 10–12': 'Task: Translate English Integrated Science questions into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0).\n3. Use Arabic symbols for labels (أ، ب، ج).\n4. Keep abbreviated units of measure in English.\n5. Translate any text within figures.\n6. Use Modern Standard Arabic (MSA) only.'
+                    }
+                },
+                'ICT': {
+                    grades: ['Grade 4', 'Grade 5'],
+                    prompts: {
+                        'Grade 4': 'Task: Translate English ICT questions for grade 4 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use Arabic numerals (١، ٢، ٠).\n3. Product names (like Whatsapp) should be in bilingual format.\n4. Use Modern Standard Arabic (MSA) only.',
+                        'Grade 5': 'Task: Translate English ICT questions for grade 5 into accurate, age-appropriate Arabic.\nRules:\n1. Use official MoE phrasing.\n2. Use English numerals (1, 2, 0).\n3. Use Arabic symbols for labels (أ، ب، ج).\n4. Use Modern Standard Arabic (MSA) only.'
+                    }
+                }
+            },
+
+            init() {
+                this.populateSubjects();
+                this.updateUI();
+            },
+
+            populateSubjects() {
+                TranslatorApp.dom.subjectSelect.innerHTML = '';
+                Object.keys(this.data).forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject;
+                    option.textContent = subject;
+                    TranslatorApp.dom.subjectSelect.appendChild(option);
+                });
+            },
+
+            populateGrades(subject) {
+                TranslatorApp.dom.gradeSelect.innerHTML = '';
+                const subjectData = this.data[subject];
+                if (subjectData && subjectData.grades) {
+                    subjectData.grades.forEach(grade => {
+                        const option = document.createElement('option');
+                        option.value = grade;
+                        option.textContent = grade;
+                        TranslatorApp.dom.gradeSelect.appendChild(option);
+                    });
+                }
+            },
+
+            onSubjectChange() {
+                const selectedSubject = TranslatorApp.dom.subjectSelect.value;
+                this.populateGrades(selectedSubject);
+                this.updatePromptPreview();
+            },
+
+            onGradeChange() {
+                this.updatePromptPreview();
+            },
+
+            updatePromptPreview() {
+                const prompt = this.getCurrentPrompt();
+                TranslatorApp.dom.promptPreview.value = prompt;
+            },
+
+            getCurrentPrompt() {
+                const subject = TranslatorApp.dom.subjectSelect.value;
+                const grade = TranslatorApp.dom.gradeSelect.value;
+                
+                if (subject === 'None' || !this.data[subject]) {
+                    return this.data['None'].prompt;
+                }
+
+                return this.data[subject].prompts[grade] || this.data[subject].prompts[Object.keys(this.data[subject].prompts)[0]] || '';
+            },
+
+            // *** FIXED: Consolidated the 'apply' function into a single, correct async version. ***
+            async apply() {
+                TranslatorApp.state.selectedSubject = TranslatorApp.dom.subjectSelect.value;
+                TranslatorApp.state.selectedGrade = TranslatorApp.dom.gradeSelect.value;
+                TranslatorApp.state.hasUnsavedChanges = true;
+                TranslatorApp.ui.showSubjectsModal(false);
+                
+                TranslatorApp.ui.showAlert(
+                    `تم تطبيق إعدادات: ${TranslatorApp.state.selectedSubject} - ${TranslatorApp.state.selectedGrade}`,
+                    'success'
+                );
+                
+                // Fetch the glossary from the sheet after selecting the subject
+                await fetchGlossaryFromSheet(TranslatorApp.state.selectedSubject);
+            },
+
+            updateUI() {
+                TranslatorApp.dom.subjectSelect.value = TranslatorApp.state.selectedSubject;
+                this.populateGrades(TranslatorApp.state.selectedSubject);
+                TranslatorApp.dom.gradeSelect.value = TranslatorApp.state.selectedGrade;
+                this.updatePromptPreview();
+            }
+        },
+
+        // --- API & TRANSLATION ---
+        api: {
+            async translateWithRetry(texts, apiKeyOrUrl, provider, maxRetries = 3, localModelName = '', systemPrompt = '') {
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    try {
+                        TranslatorApp.ui.updateProgress(`جاري الترجمة... (المحاولة ${attempt}/${maxRetries})`);
+                        return await this.translateBatch(texts, apiKeyOrUrl, provider, localModelName, systemPrompt);
+                    } catch (error) {
+                        console.error(`Attempt ${attempt} failed:`, error);
+                        if (attempt === maxRetries) throw error;
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+                    }
+                }
+            },
+            async translateBatch(texts, apiKeyOrUrl, provider, localModelName = '', systemPrompt = '') {
+                const BATCH_SEPARATOR = "\n|||---|||\n";
+                const CONTEXT_SEPARATOR = "\n<SEP>\n";
+                
+                const userPrompt = `You will receive a batch of texts separated by "${BATCH_SEPARATOR}". Some of these texts might contain internal separators like "${CONTEXT_SEPARATOR}". If a text contains "${CONTEXT_SEPARATOR}", it represents a question's stem followed by its answer choices. Translate the stem and each choice individually to Arabic, but maintain their relationship and the "${CONTEXT_SEPARATOR}" separators in the output. For texts without "${CONTEXT_SEPARATOR}", translate them as single units. Keep any HTML tags or LaTeX equations unchanged.\n\n${texts.join(BATCH_SEPARATOR)}`;
+                
+                let responseText;
+                if (provider === 'gemini') {
+                    responseText = await this.withGemini(systemPrompt, userPrompt, apiKeyOrUrl);
+                } else if (provider === 'chatgpt') {
+                    responseText = await this.withChatGPT(systemPrompt, userPrompt, apiKeyOrUrl);
+                } else {
+                    responseText = await this.withLocalModel(systemPrompt, userPrompt, apiKeyOrUrl, localModelName);
+                }
+                
+                const translatedTexts = responseText.split(BATCH_SEPARATOR.trim());
+                if (translatedTexts.length !== texts.length) {
+                    console.error("Mismatch in translated texts count.", { sent: texts.length, received: translatedTexts.length });
+                    throw new Error("حدث خطأ أثناء معالجة الترجمة المجمعة، عدد النصوص المترجمة لا يتطابق.");
+                }
+                return translatedTexts.map(t => t.trim());
+            },
+            async withGemini(systemPrompt, userPrompt, apiKey) {
+                const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${userPrompt}` : userPrompt;
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const response = await fetch(apiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: fullPrompt }] }] })
+                });
+                if (!response.ok) { const err = await response.json(); throw new Error(`Gemini API Error: ${err.error?.message || response.statusText}`); }
+                const data = await response.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            },
+            async withChatGPT(systemPrompt, userPrompt, apiKey) {
+                const apiUrl = 'https://api.openai.com/v1/chat/completions';
+                const messages = [];
+                if (systemPrompt) {
+                    messages.push({ role: 'system', content: systemPrompt });
+                }
+                messages.push({ role: 'user', content: userPrompt });
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                    body: JSON.stringify({
+                        model: 'gpt-4o',
+                        messages: messages,
+                        temperature: 0.3
+                    })
+                });
+                if (!response.ok) { const err = await response.json(); throw new Error(`ChatGPT API Error: ${err.error?.message || response.statusText}`); }
+                const data = await response.json();
+                return data.choices?.[0]?.message?.content || '';
+            },
+            async withLocalModel(systemPrompt, userPrompt, url, modelName) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: modelName,
+                            prompt: userPrompt,
+                            system: systemPrompt,
+                            stream: false
+                        })
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Local server error: ${response.status} ${response.statusText}`);
+                    }
+                    const data = await response.json();
+                    return data.response || '';
+                } catch (error) {
+                    console.error("Local model fetch error:", error);
+                    throw new Error("فشل الاتصال بالنموذج المحلي. تأكد من أن الخادم يعمل وأن العنوان صحيح.");
+                }
+            }
+        },
+        
+        // --- HISTORY (UNDO/REDO) ---
+        history: {
+            stack: [],
+            currentIndex: -1,
+            init() {
+                this.updateButtons();
+            },
+            push(state) {
+                // Debounce pushing to history
+                if (this.timeout) clearTimeout(this.timeout);
+                this.timeout = setTimeout(() => {
+                    this.stack = this.stack.slice(0, this.currentIndex + 1);
+                    this.stack.push(JSON.parse(JSON.stringify(state)));
+                    this.currentIndex++;
+                    this.updateButtons();
+                }, 500); // Push state only after 500ms of inactivity
+            },
+            undo() {
+                if (this.currentIndex > 0) {
+                    this.currentIndex--;
+                    this.restore(this.stack[this.currentIndex]);
+                }
+            },
+            redo() {
+                if (this.currentIndex < this.stack.length - 1) {
+                    this.currentIndex++;
+                    this.restore(this.stack[this.currentIndex]);
+                }
+            },
+            restore(state) {
+                TranslatorApp.state.translatedJsonData = JSON.parse(JSON.stringify(state));
+                TranslatorApp.preview.render();
+                this.updateButtons();
+                TranslatorApp.state.hasUnsavedChanges = true;
+            },
+            updateButtons() {
+                TranslatorApp.dom.undoBtn.disabled = this.currentIndex <= 0;
+                TranslatorApp.dom.redoBtn.disabled = this.currentIndex >= this.stack.length - 1;
+            }
+        },
+
+        // --- MAIN PROCESS ---
+        async startTranslationProcess() {
+            const apiProvider = document.querySelector('input[name="apiProvider"]:checked').value;
+            let apiKeyOrUrl;
+            let localModelName;
+
+            if (apiProvider === 'gemini') {
+                apiKeyOrUrl = this.dom.geminiKeyInput.value.trim();
+                if (!this.validation.validateApiKey(apiKeyOrUrl, 'gemini')) return this.ui.showAlert(`مفتاح API لـ Gemini غير صالح.`, 'error');
+            } else if (apiProvider === 'chatgpt') {
+                apiKeyOrUrl = this.dom.chatgptKeyInput.value.trim();
+                if (!this.validation.validateApiKey(apiKeyOrUrl, 'chatgpt')) return this.ui.showAlert(`مفتاح API لـ ChatGPT غير صالح.`, 'error');
+            } else { // local model
+                apiKeyOrUrl = this.dom.localModelUrl.value.trim();
+                localModelName = this.dom.localModelName.value.trim();
+                if (!apiKeyOrUrl || !localModelName) return this.ui.showAlert('الرجاء إدخال عنوان URL واسم النموذج المحلي.', 'error');
+            }
+            
+            if (this.state.selectedFilesInfo.length === 0) return this.ui.showAlert('الرجاء اختيار ملف JSON واحد على الأقل.', 'error');
+
+            this.ui.showScreen('progress');
+            this.dom.translateBtn.disabled = true;
+            this.state.translationCache.clear();
+            this.state.startTime = Date.now();
+
+            try {
+                this.ui.updateProgress('جاري قراءة الملفات...');
+                await this.fileHandler.readFilesFromInput();
+                this.state.translatedJsonData = JSON.parse(JSON.stringify(this.state.originalJsonData));
+
+                this.ui.updateProgress('جاري تجميع النصوص للترجمة...');
+                const translationJobs = [];
+                const useGlossary = this.dom.useGlossaryCheckbox.checked;
+                const CONTEXT_SEPARATOR = "\n<SEP>\n";
+
+                this.state.originalJsonData.forEach((file, fileIndex) => {
+                    // Handle statement
+                    if (file.data.statement) {
+                        const { modifiedText, placeholders } = useGlossary ? this.glossary.apply(file.data.statement) : { modifiedText: file.data.statement, placeholders: {} };
+                        translationJobs.push({
+                            type: 'single',
+                            originalText: modifiedText,
+                            placeholders,
+                            pointer: { fileIndex, key: 'statement' }
+                        });
+                    }
+
+                    // Handle parts (stem + choices)
+                    file.data.parts?.forEach((part, partIndex) => {
+                        if (part.stem && part.choices) {
+                            let blockParts = [];
+                            let blockPlaceholders = [];
+
+                            // Process stem
+                            const { modifiedText: modStem, placeholders: stemPlaceholders } = useGlossary ? this.glossary.apply(part.stem) : { modifiedText: part.stem, placeholders: {} };
+                            blockParts.push(modStem);
+                            blockPlaceholders.push(stemPlaceholders);
+                            
+                            // Process choices
+                            part.choices.forEach(choice => {
+                                const { modifiedText: modChoice, placeholders: choicePlaceholders } = useGlossary ? this.glossary.apply(choice.html_content) : { modifiedText: choice.html_content, placeholders: {} };
+                                blockParts.push(modChoice);
+                                blockPlaceholders.push(choicePlaceholders);
+                            });
+
+                            translationJobs.push({
+                                type: 'block',
+                                originalText: blockParts.join(CONTEXT_SEPARATOR),
+                                placeholders: blockPlaceholders,
+                                pointer: { fileIndex, partIndex, numChoices: part.choices.length }
+                            });
+                        }
+                        // Handle answer separately
+                        if (part.answer) {
+                            const { modifiedText, placeholders } = useGlossary ? this.glossary.apply(part.answer) : { modifiedText: part.answer, placeholders: {} };
                             translationJobs.push({
                                 type: 'single',
                                 originalText: modifiedText,
                                 placeholders,
-                                pointer: { fileIndex, key: 'statement' }
+                                pointer: { fileIndex, partIndex, key: 'answer' }
                             });
                         }
-
-                        // Handle parts (stem + choices)
-                        file.data.parts?.forEach((part, partIndex) => {
-                            if (part.stem && part.choices) {
-                                let blockParts = [];
-                                let blockPlaceholders = [];
-
-                                // Process stem
-                                const { modifiedText: modStem, placeholders: stemPlaceholders } = useGlossary ? this.glossary.apply(part.stem) : { modifiedText: part.stem, placeholders: {} };
-                                blockParts.push(modStem);
-                                blockPlaceholders.push(stemPlaceholders);
-                                
-                                // Process choices
-                                part.choices.forEach(choice => {
-                                    const { modifiedText: modChoice, placeholders: choicePlaceholders } = useGlossary ? this.glossary.apply(choice.html_content) : { modifiedText: choice.html_content, placeholders: {} };
-                                    blockParts.push(modChoice);
-                                    blockPlaceholders.push(choicePlaceholders);
-                                });
-
-                                translationJobs.push({
-                                    type: 'block',
-                                    originalText: blockParts.join(CONTEXT_SEPARATOR),
-                                    placeholders: blockPlaceholders,
-                                    pointer: { fileIndex, partIndex, numChoices: part.choices.length }
-                                });
-                            }
-                            // Handle answer separately
-                            if (part.answer) {
-                                const { modifiedText, placeholders } = useGlossary ? this.glossary.apply(part.answer) : { modifiedText: part.answer, placeholders: {} };
-                                translationJobs.push({
-                                    type: 'single',
-                                    originalText: modifiedText,
-                                    placeholders,
-                                    pointer: { fileIndex, partIndex, key: 'answer' }
-                                });
-                            }
-                        });
                     });
+                });
 
-                    const uniqueJobs = [];
-                    const seenTexts = new Set();
-                    for (const job of translationJobs) {
-                        if (!seenTexts.has(job.originalText)) {
-                            uniqueJobs.push(job);
-                            seenTexts.add(job.originalText);
-                        }
+                const uniqueJobs = [];
+                const seenTexts = new Set();
+                for (const job of translationJobs) {
+                    if (!seenTexts.has(job.originalText)) {
+                        uniqueJobs.push(job);
+                        seenTexts.add(job.originalText);
                     }
-
-                    this.ui.updateProgress(`جاري ترجمة ${uniqueJobs.length} نص فريد...`);
-                    
-                    if (uniqueJobs.length > 0) {
-                        const systemPrompt = this.subjects.getCurrentPrompt();
-                        const textsToTranslate = uniqueJobs.map(job => job.originalText);
-                        const translatedTexts = await this.api.translateWithRetry(textsToTranslate, apiKeyOrUrl, apiProvider, 3, localModelName, systemPrompt);
-                        
-                        uniqueJobs.forEach((job, i) => {
-                            this.state.translationCache.set(job.originalText, translatedTexts[i]);
-                        });
-                    }
-
-                    this.ui.updateProgress('جاري تحديث البيانات...');
-                    
-                    translationJobs.forEach(job => {
-                        const translatedText = this.state.translationCache.get(job.originalText);
-                        if (translatedText === undefined) return;
-
-                        if (job.type === 'single') {
-                            const final_text = this.glossary.revert(translatedText, job.placeholders);
-                            const { fileIndex, partIndex, key } = job.pointer;
-                            if (key === 'statement') {
-                                this.state.translatedJsonData[fileIndex].data.statement = final_text;
-                            } else if (key === 'answer') {
-                                this.state.translatedJsonData[fileIndex].data.parts[partIndex].answer = final_text;
-                            }
-                        } else if (job.type === 'block') {
-                            const translatedParts = translatedText.split(CONTEXT_SEPARATOR);
-                            const { fileIndex, partIndex, numChoices } = job.pointer;
-                            
-                            if (translatedParts.length === numChoices + 1) {
-                                // Revert stem
-                                const translatedStem = this.glossary.revert(translatedParts[0], job.placeholders[0]);
-                                this.state.translatedJsonData[fileIndex].data.parts[partIndex].stem = translatedStem;
-                                
-                                // Revert choices
-                                for (let i = 0; i < numChoices; i++) {
-                                    const translatedChoice = this.glossary.revert(translatedParts[i + 1], job.placeholders[i + 1]);
-                                    this.state.translatedJsonData[fileIndex].data.parts[partIndex].choices[i].html_content = translatedChoice;
-                                }
-                            } else {
-                                console.warn("Mismatch in translated block parts for file", fileIndex, "part", partIndex);
-                            }
-                        }
-                    });
-
-
-                    this.state.activeScreen = 'preview';
-                    this.history.push(this.state.translatedJsonData);
-                    this.session.save();
-                    this.ui.showScreen('preview');
-                    this.preview.render();
-                    const stats = this.statistics.calculate();
-                    this.ui.renderStatistics(stats);
-                    this.ui.showAlert('تمت الترجمة بنجاح!', 'success');
-
-                } catch (error) {
-                    console.error('Translation process failed:', error);
-                    this.ui.showAlert(error.message, 'error');
-                    this.ui.showScreen('setup');
-                } finally {
-                    this.dom.translateBtn.disabled = false;
                 }
+
+                this.ui.updateProgress(`جاري ترجمة ${uniqueJobs.length} نص فريد...`);
+                
+                if (uniqueJobs.length > 0) {
+                    const systemPrompt = this.subjects.getCurrentPrompt();
+                    const textsToTranslate = uniqueJobs.map(job => job.originalText);
+                    const translatedTexts = await this.api.translateWithRetry(textsToTranslate, apiKeyOrUrl, apiProvider, 3, localModelName, systemPrompt);
+                    
+                    uniqueJobs.forEach((job, i) => {
+                        this.state.translationCache.set(job.originalText, translatedTexts[i]);
+                    });
+                }
+
+                this.ui.updateProgress('جاري تحديث البيانات...');
+                
+                translationJobs.forEach(job => {
+                    const translatedText = this.state.translationCache.get(job.originalText);
+                    if (translatedText === undefined) return;
+
+                    if (job.type === 'single') {
+                        const final_text = this.glossary.revert(translatedText, job.placeholders);
+                        const { fileIndex, partIndex, key } = job.pointer;
+                        if (key === 'statement') {
+                            this.state.translatedJsonData[fileIndex].data.statement = final_text;
+                        } else if (key === 'answer') {
+                            this.state.translatedJsonData[fileIndex].data.parts[partIndex].answer = final_text;
+                        }
+                    } else if (job.type === 'block') {
+                        const translatedParts = translatedText.split(CONTEXT_SEPARATOR);
+                        const { fileIndex, partIndex, numChoices } = job.pointer;
+                        
+                        if (translatedParts.length === numChoices + 1) {
+                            // Revert stem
+                            const translatedStem = this.glossary.revert(translatedParts[0], job.placeholders[0]);
+                            this.state.translatedJsonData[fileIndex].data.parts[partIndex].stem = translatedStem;
+                            
+                            // Revert choices
+                            for (let i = 0; i < numChoices; i++) {
+                                const translatedChoice = this.glossary.revert(translatedParts[i + 1], job.placeholders[i + 1]);
+                                this.state.translatedJsonData[fileIndex].data.parts[partIndex].choices[i].html_content = translatedChoice;
+                            }
+                        } else {
+                            console.warn("Mismatch in translated block parts for file", fileIndex, "part", partIndex);
+                        }
+                    }
+                });
+
+
+                this.state.activeScreen = 'preview';
+                this.history.push(this.state.translatedJsonData);
+                this.session.save();
+                this.ui.showScreen('preview');
+                this.preview.render();
+                const stats = this.statistics.calculate();
+                this.ui.renderStatistics(stats);
+                this.ui.showAlert('تمت الترجمة بنجاح!', 'success');
+
+            } catch (error) {
+                console.error('Translation process failed:', error);
+                this.ui.showAlert(error.message, 'error');
+                this.ui.showScreen('setup');
+            } finally {
+                this.dom.translateBtn.disabled = false;
+            }
+        },
+        
+        // --- STATISTICS ---
+        statistics: {
+            calculate() {
+                let totalTexts = 0;
+                let totalWords = 0;
+                const count = (text) => {
+                    if (text && typeof text === 'string') {
+                        totalTexts++;
+                        const div = document.createElement('div');
+                        div.innerHTML = text;
+                        totalWords += (div.textContent || div.innerText || "").split(/\s+/).filter(Boolean).length;
+                    }
+                };
+                TranslatorApp.state.originalJsonData.forEach(file => {
+                    count(file.data.statement);
+                    file.data.parts?.forEach(part => {
+                        count(part.stem);
+                        count(part.answer);
+                        part.choices?.forEach(choice => count(choice.html_content));
+                    });
+                });
+                const timeElapsed = TranslatorApp.state.startTime ? ((Date.now() - TranslatorApp.state.startTime) / 1000).toFixed(1) : 0;
+                return {
+                    totalFiles: TranslatorApp.state.selectedFilesInfo.length,
+                    totalTexts: totalTexts,
+                    totalWords: totalWords,
+                    timeElapsed: timeElapsed,
+                };
+            }
+        },
+
+        // --- UI & RENDER ---
+        ui: {
+            showScreen(screenName) { // screenName can be 'setup', 'progress', or 'preview'
+                TranslatorApp.state.activeScreen = screenName;
+                
+                ['setupSection', 'progressContainer', 'previewSection', 'analyticsSection'].forEach(id => {
+                    if (TranslatorApp.dom[id]) {
+                        TranslatorApp.dom[id].classList.add('hidden');
+                    }
+                });
+
+                switch(screenName) {
+                    case 'setup':
+                        if (TranslatorApp.dom.setupSection) TranslatorApp.dom.setupSection.classList.remove('hidden');
+                        break;
+                    case 'progress':
+                        if (TranslatorApp.dom.progressContainer) TranslatorApp.dom.progressContainer.classList.remove('hidden');
+                        break;
+                    case 'preview':
+                        if (TranslatorApp.dom.previewSection) TranslatorApp.dom.previewSection.classList.remove('hidden');
+                        if (TranslatorApp.dom.analyticsSection) TranslatorApp.dom.analyticsSection.classList.remove('hidden');
+                        break;
+                }
+            },
+            updateProgress(text) { TranslatorApp.dom.progressText.textContent = text; },
+            showAlert(message, type = 'error', duration = 5000) {
+                const colors = { error: 'bg-red-500', success: 'bg-green-500', info: 'bg-blue-500' };
+                const alertBox = document.createElement('div');
+                alertBox.className = `alert flex justify-between items-center text-white p-4 rounded-lg shadow-xl ${colors[type] || 'bg-gray-500'}`;
+                alertBox.innerHTML = `<span>${message}</span><button class="mr-2 text-xl font-bold">&times;</button>`;
+                alertBox.querySelector('button').onclick = () => alertBox.remove();
+                TranslatorApp.dom.alertContainer.appendChild(alertBox);
+                if (duration) { setTimeout(() => { alertBox.classList.add('fade-out'); alertBox.addEventListener('transitionend', () => alertBox.remove()); }, duration); }
+            },
+            renderFileList() {
+                const { fileList } = TranslatorApp.dom;
+                fileList.innerHTML = '';
+                if (TranslatorApp.state.selectedFilesInfo.length === 0) return;
+                const listContainer = document.createElement('ul');
+                listContainer.className = 'my-4 space-y-2';
+                TranslatorApp.state.selectedFilesInfo.forEach((fileInfo, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center p-2 rounded-lg'
+                    li.style.backgroundColor = 'color-mix(in srgb, var(--primary-color) 5%, var(--card-bg))';
+                    li.innerHTML = `<span class="font-medium">${fileInfo.name}</span><button data-index="${index}" class="remove-file-btn text-red-500 hover:text-red-700 font-bold text-xl">&times;</button>`;
+                    listContainer.appendChild(li);
+                });
+                fileList.appendChild(listContainer);
+                fileList.querySelectorAll('.remove-file-btn').forEach(btn => { btn.onclick = () => TranslatorApp.fileHandler.removeFile(parseInt(btn.dataset.index)); });
+            },
+            showGlossaryModal(show) { TranslatorApp.dom.glossaryModal.classList.toggle('hidden', !show); },
+            showMappedIdsModal(show) { TranslatorApp.dom.mappedIdsModal.classList.toggle('hidden', !show); },
+            showSubjectsModal(show) { TranslatorApp.dom.subjectsModal.classList.toggle('hidden', !show); },
+            renderGlossaryList(list) {
+                const { glossaryListContainer } = TranslatorApp.dom;
+                glossaryListContainer.innerHTML = '';
+                if (list.length === 0) {
+                    glossaryListContainer.innerHTML = `<p class="text-center" style="color: var(--secondary-text)">لا توجد مصطلحات.</p>`;
+                    return;
+                }
+                const ul = document.createElement('ul');
+                ul.className = 'space-y-2';
+                list.forEach((entry) => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center p-2 rounded-md border';
+                    li.style.backgroundColor = 'var(--card-bg)';
+                    li.style.borderColor = 'var(--card-border)';
+                    
+                    const originalIndex = TranslatorApp.state.glossary.findIndex(g => g.term === entry.term);
+
+                    li.innerHTML = `
+                        <div>
+                            <span class="font-semibold">${entry.term}</span>
+                            <span class="mx-2" style="color: var(--secondary-text)">→</span>
+                            <span>${entry.translation}</span>
+                            <span class="text-xs mr-2 px-2 py-1 rounded-full" style="background-color: var(--bg-color);">${entry.category || 'عام'}</span>
+                        </div>
+                        <button data-index="${originalIndex}" class="remove-glossary-btn text-red-500 hover:text-red-700 font-bold">&times;</button>
+                    `;
+                    ul.appendChild(li);
+                });
+                glossaryListContainer.appendChild(ul);
+                glossaryListContainer.querySelectorAll('.remove-glossary-btn').forEach(btn => { 
+                    btn.onclick = () => TranslatorApp.glossary.delete(parseInt(btn.dataset.index)); 
+                });
+            },
+            renderStatistics(stats) {
+                const { statsContainer } = TranslatorApp.dom;
+                statsContainer.innerHTML = '';
+                const statsMap = {
+                    'إجمالي الملفات': stats.totalFiles,
+                    'إجمالي النصوص': stats.totalTexts,
+                    'إجمالي الكلمات': stats.totalWords,
+                    'زمن الترجمة (ث)': stats.timeElapsed,
+                };
+                Object.entries(statsMap).forEach(([label, value]) => {
+                    const statCard = document.createElement('div');
+                    statCard.className = 'p-4 rounded-lg';
+                    statCard.style.backgroundColor = 'color-mix(in srgb, var(--primary-color) 10%, var(--card-bg))';
+                    statCard.innerHTML = `
+                        <div class="text-2xl font-bold" style="color: var(--primary-color);">${value}</div>
+                        <div class="text-sm" style="color: var(--secondary-text);">${label}</div>
+                    `;
+                    statsContainer.appendChild(statCard);
+                });
+            },
+        },
+        
+        // --- ADVANCED PREVIEW MODULE ---
+        preview: {
+            editorInstances: new Map(),
+            
+            render() {
+                const { previewContainer } = TranslatorApp.dom;
+                previewContainer.innerHTML = '';
+                this.editorInstances.clear();
+
+                TranslatorApp.state.translatedJsonData.forEach((file, fileIndex) => {
+                    const originalFile = TranslatorApp.state.originalJsonData[fileIndex];
+                    const card = document.createElement('div');
+                    card.className = 'preview-card p-6 rounded-2xl shadow-lg';
+                    card.id = `file-card-${fileIndex}`;
+                    
+                    card.innerHTML = `
+                        <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
+                            <h3 class="text-xl font-bold">📄 ${file.name}</h3>
+                        </div>
+                        <div class="comparison-content grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="original-content">
+                                <h4 class="font-semibold mb-3 border-b pb-2" style="color: var(--secondary-text);">النص الأصلي</h4>
+                                ${this.renderReadOnlyContent(originalFile.data)}
+                            </div>
+                            <div class="translated-content">
+                                <h4 class="font-semibold mb-3 border-b pb-2" style="color: var(--success-color);">النص المترجم (قابل للتعديل)</h4>
+                                ${this.renderEditableContent(file.data, fileIndex)}
+                            </div>
+                        </div>
+                    `;
+                    previewContainer.appendChild(card);
+                    this.initEditorsForFile(fileIndex);
+                });
+            },
+
+            renderReadOnlyContent(data) {
+                let content = '';
+                const createField = (label, value) => {
+                    if (value === undefined || value === null) return '';
+                    return `<div class="mb-4"><p class="font-semibold text-sm mb-1">${label}</p><div class="p-3 rounded-lg text-sm" style="background-color: var(--bg-color);">${TranslatorApp.security.sanitize(value)}</div></div>`;
+                };
+                content += createField('البيان (Statement)', data.statement);
+                data.parts?.forEach((part, partIndex) => {
+                    content += `<div class="border-t pt-4 mt-4" style="border-color: var(--card-border);"><h5 class="font-semibold text-md mb-2" style="color: var(--secondary-text);">الجزء ${partIndex + 1}</h5>`;
+                    content += createField('السؤال (Stem)', part.stem);
+                    content += createField('الإجابة (Answer)', part.answer);
+                    if (part.choices) {
+                        content += `<div class="mb-3"><p class="font-semibold text-sm mb-1">الخيارات (Choices):</p><ul class="list-disc list-inside space-y-2 mr-4">`;
+                        part.choices.forEach(choice => {
+                            content += `<li><div class="p-2 rounded-lg text-sm" style="background-color: var(--bg-color);">${TranslatorApp.security.sanitize(choice.html_content)}</div></li>`;
+                        });
+                        content += `</ul></div>`;
+                    }
+                    content += `</div>`;
+                });
+                return content;
+            },
+
+            renderEditableContent(data, fileIndex) {
+                let content = '';
+                const createField = (label, value, path) => {
+                    if (value === undefined || value === null) return '';
+                    const editorId = `editor-${fileIndex}-${path.replace(/\./g, '-')}`;
+                    return `<div class="mb-4"><p class="font-semibold text-sm mb-1">${label}</p><div id="${editorId}"></div></div>`;
+                };
+                content += createField('البيان (Statement)', data.statement, 'statement');
+                data.parts?.forEach((part, partIndex) => {
+                    content += `<div class="border-t pt-4 mt-4" style="border-color: var(--card-border);"><h5 class="font-semibold text-md mb-2" style="color: var(--secondary-text);">الجزء ${partIndex + 1}</h5>`;
+                    content += createField('السؤال (Stem)', part.stem, `parts.${partIndex}.stem`);
+                    content += createField('الإجابة (Answer)', part.answer, `parts.${partIndex}.answer`);
+                    if (part.choices) {
+                         content += `<div class="mb-3"><p class="font-semibold text-sm mb-1">الخيارات (Choices):</p><ul class="space-y-2">`;
+                        part.choices.forEach((choice, choiceIndex) => {
+                            content += `<li>${createField(`خيار ${choiceIndex + 1}`, choice.html_content, `parts.${partIndex}.choices.${choiceIndex}.html_content`)}</li>`;
+                        });
+                        content += `</ul></div>`;
+                    }
+                    content += `</div>`;
+                });
+                return content;
+            },
+
+            initEditorsForFile(fileIndex) {
+                const fileData = TranslatorApp.state.translatedJsonData[fileIndex].data;
+                const createEditor = (path, initialContent) => {
+                    const editorId = `editor-${fileIndex}-${path.replace(/\./g, '-')}`;
+                    const editorDiv = document.getElementById(editorId);
+                    if (!editorDiv) return;
+
+                    const quill = new Quill(editorDiv, {
+                        theme: 'snow',
+                        modules: { toolbar: [['bold', 'italic', 'underline'], [{ 'list': 'ordered'}, { 'list': 'bullet' }]] },
+                    });
+                    quill.root.innerHTML = initialContent || '';
+                    
+                    quill.on('text-change', () => {
+                        this.updateData(fileIndex, path, quill.root.innerHTML);
+                    });
+                    this.editorInstances.set(editorId, quill);
+                };
+
+                createEditor('statement', fileData.statement);
+                fileData.parts?.forEach((part, partIndex) => {
+                    createEditor(`parts.${partIndex}.stem`, part.stem);
+                    createEditor(`parts.${partIndex}.answer`, part.answer);
+                    part.choices?.forEach((choice, choiceIndex) => {
+                        createEditor(`parts.${partIndex}.choices.${choiceIndex}.html_content`, choice.html_content);
+                    });
+                });
+            },
+
+            updateData(fileIndex, path, value) {
+                const keys = path.split('.');
+                let current = TranslatorApp.state.translatedJsonData[fileIndex].data;
+                for (let i = 0; i < keys.length - 1; i++) {
+                    current = current[keys[i]];
+                }
+                current[keys[keys.length - 1]] = value;
+                TranslatorApp.history.push(TranslatorApp.state.translatedJsonData);
+                TranslatorApp.state.hasUnsavedChanges = true;
             },
             
-            // --- STATISTICS ---
-            statistics: {
-                calculate() {
-                    let totalTexts = 0;
-                    let totalWords = 0;
-                    const count = (text) => {
-                        if (text && typeof text === 'string') {
-                            totalTexts++;
-                            const div = document.createElement('div');
-                            div.innerHTML = text;
-                            totalWords += (div.textContent || div.innerText || "").split(/\s+/).filter(Boolean).length;
-                        }
-                    };
-                    TranslatorApp.state.originalJsonData.forEach(file => {
-                        count(file.data.statement);
-                        file.data.parts?.forEach(part => {
-                            count(part.stem);
-                            count(part.answer);
-                            part.choices?.forEach(choice => count(choice.html_content));
-                        });
-                    });
-                    const timeElapsed = TranslatorApp.state.startTime ? ((Date.now() - TranslatorApp.state.startTime) / 1000).toFixed(1) : 0;
-                    return {
-                        totalFiles: TranslatorApp.state.selectedFilesInfo.length,
-                        totalTexts: totalTexts,
-                        totalWords: totalWords,
-                        timeElapsed: timeElapsed,
-                    };
-                }
+            filter() {
+                const searchTerm = TranslatorApp.dom.searchPreview.value.toLowerCase();
+                const cards = document.querySelectorAll('.preview-card');
+                
+                cards.forEach(card => {
+                    const content = card.textContent.toLowerCase();
+                    const isVisible = content.includes(searchTerm);
+                    card.style.display = isVisible ? '' : 'none';
+                    
+                    // Highlight logic
+                    if (isVisible && searchTerm) {
+                       this.highlightInCard(card, searchTerm);
+                    } else {
+                       this.clearHighlight(card);
+                    }
+                });
             },
 
-            // --- UI & RENDER ---
-            ui: {
-                showScreen(screenName) { // screenName can be 'setup', 'progress', or 'preview'
-                    TranslatorApp.state.activeScreen = screenName;
-                    
-                    ['setupSection', 'progressContainer', 'previewSection', 'analyticsSection'].forEach(id => {
-                        if (TranslatorApp.dom[id]) {
-                            TranslatorApp.dom[id].classList.add('hidden');
+            highlightInCard(card, term) {
+                this.clearHighlight(card);
+                const regex = new RegExp(`(${this.escapeRegex(term)})`, 'gi');
+                
+                const processNode = (node) => {
+                    if (node.nodeType === 3) { // Text node
+                        const text = node.textContent;
+                        if (text.toLowerCase().includes(term)) {
+                            const span = document.createElement('span');
+                            span.innerHTML = text.replace(regex, `<span class="search-highlight">$1</span>`);
+                            node.parentNode.replaceChild(span, node);
                         }
-                    });
-
-                    switch(screenName) {
-                        case 'setup':
-                            if (TranslatorApp.dom.setupSection) TranslatorApp.dom.setupSection.classList.remove('hidden');
-                            break;
-                        case 'progress':
-                            if (TranslatorApp.dom.progressContainer) TranslatorApp.dom.progressContainer.classList.remove('hidden');
-                            break;
-                        case 'preview':
-                            if (TranslatorApp.dom.previewSection) TranslatorApp.dom.previewSection.classList.remove('hidden');
-                            if (TranslatorApp.dom.analyticsSection) TranslatorApp.dom.analyticsSection.classList.remove('hidden');
-                            break;
+                    } else if (node.nodeType === 1 && node.nodeName !== 'SPAN' && !node.classList.contains('search-highlight')) {
+                        // Element node, recurse
+                        Array.from(node.childNodes).forEach(processNode);
                     }
-                },
-                updateProgress(text) { TranslatorApp.dom.progressText.textContent = text; },
-                showAlert(message, type = 'error', duration = 5000) {
-                    const colors = { error: 'bg-red-500', success: 'bg-green-500', info: 'bg-blue-500' };
-                    const alertBox = document.createElement('div');
-                    alertBox.className = `alert flex justify-between items-center text-white p-4 rounded-lg shadow-xl ${colors[type] || 'bg-gray-500'}`;
-                    alertBox.innerHTML = `<span>${message}</span><button class="mr-2 text-xl font-bold">&times;</button>`;
-                    alertBox.querySelector('button').onclick = () => alertBox.remove();
-                    TranslatorApp.dom.alertContainer.appendChild(alertBox);
-                    if (duration) { setTimeout(() => { alertBox.classList.add('fade-out'); alertBox.addEventListener('transitionend', () => alertBox.remove()); }, duration); }
-                },
-                renderFileList() {
-                    const { fileList } = TranslatorApp.dom;
-                    fileList.innerHTML = '';
-                    if (TranslatorApp.state.selectedFilesInfo.length === 0) return;
-                    const listContainer = document.createElement('ul');
-                    listContainer.className = 'my-4 space-y-2';
-                    TranslatorApp.state.selectedFilesInfo.forEach((fileInfo, index) => {
-                        const li = document.createElement('li');
-                        li.className = 'flex justify-between items-center p-2 rounded-lg'
-                        li.style.backgroundColor = 'color-mix(in srgb, var(--primary-color) 5%, var(--card-bg))';
-                        li.innerHTML = `<span class="font-medium">${fileInfo.name}</span><button data-index="${index}" class="remove-file-btn text-red-500 hover:text-red-700 font-bold text-xl">&times;</button>`;
-                        listContainer.appendChild(li);
-                    });
-                    fileList.appendChild(listContainer);
-                    fileList.querySelectorAll('.remove-file-btn').forEach(btn => { btn.onclick = () => TranslatorApp.fileHandler.removeFile(parseInt(btn.dataset.index)); });
-                },
-                showGlossaryModal(show) { TranslatorApp.dom.glossaryModal.classList.toggle('hidden', !show); },
-                showMappedIdsModal(show) { TranslatorApp.dom.mappedIdsModal.classList.toggle('hidden', !show); },
-                showSubjectsModal(show) { TranslatorApp.dom.subjectsModal.classList.toggle('hidden', !show); },
-                renderGlossaryList(list) {
-                    const { glossaryListContainer } = TranslatorApp.dom;
-                    glossaryListContainer.innerHTML = '';
-                    if (list.length === 0) {
-                        glossaryListContainer.innerHTML = `<p class="text-center" style="color: var(--secondary-text)">لا توجد مصطلحات.</p>`;
+                };
+
+                processNode(card);
+            },
+
+            clearHighlight(card) {
+                const highlights = card.querySelectorAll('span.search-highlight');
+                highlights.forEach(hl => {
+                    const parent = hl.parentNode;
+                    parent.replaceChild(document.createTextNode(hl.textContent), hl);
+                    parent.normalize();
+                });
+            },
+
+            getTextNodes(node) {
+                let all = [];
+                for (node = node.firstChild; node; node = node.nextSibling) {
+                    if (node.nodeType === 3) all.push(node);
+                    else if (node.nodeName !== 'SCRIPT' && node.nodeName !== 'STYLE') {
+                        all = all.concat(this.getTextNodes(node));
+                    }
+                }
+                return all;
+            },
+            
+            escapeRegex(string) {
+                return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            }
+        },
+
+        // --- EXPORT ---
+        export: {
+            async exportAs(format) {
+                switch(format) {
+                    case 'csv': return this.toCsv();
+                    case 'json':
+                    default: return this.toJson();
+                }
+            },
+            async toJson() {
+                const useMappedIds = TranslatorApp.dom.useMappedIdsCheckbox.checked;
+                let mappedIds = [];
+                let idCounter = 0;
+
+                if (useMappedIds) {
+                    try {
+                        mappedIds = JSON.parse(TranslatorApp.dom.mappedIdsInput.value);
+                        if (!Array.isArray(mappedIds)) {
+                            throw new Error("Input is not a JSON array.");
+                        }
+                    } catch (e) {
+                        TranslatorApp.ui.showAlert('قائمة المعرفات (mapped_id) غير صالحة. يرجى التأكد من أنها مصفوفة JSON صحيحة.', 'error');
                         return;
                     }
-                    const ul = document.createElement('ul');
-                    ul.className = 'space-y-2';
-                    list.forEach((entry) => {
-                        const li = document.createElement('li');
-                        li.className = 'flex justify-between items-center p-2 rounded-md border';
-                        li.style.backgroundColor = 'var(--card-bg)';
-                        li.style.borderColor = 'var(--card-border)';
-                        
-                        const originalIndex = TranslatorApp.state.glossary.findIndex(g => g.term === entry.term);
-
-                        li.innerHTML = `
-                            <div>
-                                <span class="font-semibold">${entry.term}</span>
-                                <span class="mx-2" style="color: var(--secondary-text)">→</span>
-                                <span>${entry.translation}</span>
-                                <span class="text-xs mr-2 px-2 py-1 rounded-full" style="background-color: var(--bg-color);">${entry.category || 'عام'}</span>
-                            </div>
-                            <button data-index="${originalIndex}" class="remove-glossary-btn text-red-500 hover:text-red-700 font-bold">&times;</button>
-                        `;
-                        ul.appendChild(li);
-                    });
-                    glossaryListContainer.appendChild(ul);
-                    glossaryListContainer.querySelectorAll('.remove-glossary-btn').forEach(btn => { 
-                        btn.onclick = () => TranslatorApp.glossary.delete(parseInt(btn.dataset.index)); 
-                    });
-                },
-                renderStatistics(stats) {
-                    const { statsContainer } = TranslatorApp.dom;
-                    statsContainer.innerHTML = '';
-                    const statsMap = {
-                        'إجمالي الملفات': stats.totalFiles,
-                        'إجمالي النصوص': stats.totalTexts,
-                        'إجمالي الكلمات': stats.totalWords,
-                        'زمن الترجمة (ث)': stats.timeElapsed,
-                    };
-                    Object.entries(statsMap).forEach(([label, value]) => {
-                        const statCard = document.createElement('div');
-                        statCard.className = 'p-4 rounded-lg';
-                        statCard.style.backgroundColor = 'color-mix(in srgb, var(--primary-color) 10%, var(--card-bg))';
-                        statCard.innerHTML = `
-                            <div class="text-2xl font-bold" style="color: var(--primary-color);">${value}</div>
-                            <div class="text-sm" style="color: var(--secondary-text);">${label}</div>
-                        `;
-                        statsContainer.appendChild(statCard);
-                    });
-                },
-            },
-            
-            // --- ADVANCED PREVIEW MODULE ---
-            preview: {
-                editorInstances: new Map(),
-                
-                render() {
-                    const { previewContainer } = TranslatorApp.dom;
-                    previewContainer.innerHTML = '';
-                    this.editorInstances.clear();
-
-                    TranslatorApp.state.translatedJsonData.forEach((file, fileIndex) => {
-                        const originalFile = TranslatorApp.state.originalJsonData[fileIndex];
-                        const card = document.createElement('div');
-                        card.className = 'preview-card p-6 rounded-2xl shadow-lg';
-                        card.id = `file-card-${fileIndex}`;
-                        
-                        card.innerHTML = `
-                            <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
-                                <h3 class="text-xl font-bold">📄 ${file.name}</h3>
-                            </div>
-                            <div class="comparison-content grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <div class="original-content">
-                                    <h4 class="font-semibold mb-3 border-b pb-2" style="color: var(--secondary-text);">النص الأصلي</h4>
-                                    ${this.renderReadOnlyContent(originalFile.data)}
-                                </div>
-                                <div class="translated-content">
-                                    <h4 class="font-semibold mb-3 border-b pb-2" style="color: var(--success-color);">النص المترجم (قابل للتعديل)</h4>
-                                    ${this.renderEditableContent(file.data, fileIndex)}
-                                </div>
-                            </div>
-                        `;
-                        previewContainer.appendChild(card);
-                        this.initEditorsForFile(fileIndex);
-                    });
-                },
-
-                renderReadOnlyContent(data) {
-                    let content = '';
-                    const createField = (label, value) => {
-                        if (value === undefined || value === null) return '';
-                        return `<div class="mb-4"><p class="font-semibold text-sm mb-1">${label}</p><div class="p-3 rounded-lg text-sm" style="background-color: var(--bg-color);">${TranslatorApp.security.sanitize(value)}</div></div>`;
-                    };
-                    content += createField('البيان (Statement)', data.statement);
-                    data.parts?.forEach((part, partIndex) => {
-                        content += `<div class="border-t pt-4 mt-4" style="border-color: var(--card-border);"><h5 class="font-semibold text-md mb-2" style="color: var(--secondary-text);">الجزء ${partIndex + 1}</h5>`;
-                        content += createField('السؤال (Stem)', part.stem);
-                        content += createField('الإجابة (Answer)', part.answer);
-                        if (part.choices) {
-                            content += `<div class="mb-3"><p class="font-semibold text-sm mb-1">الخيارات (Choices):</p><ul class="list-disc list-inside space-y-2 mr-4">`;
-                            part.choices.forEach(choice => {
-                                content += `<li><div class="p-2 rounded-lg text-sm" style="background-color: var(--bg-color);">${TranslatorApp.security.sanitize(choice.html_content)}</div></li>`;
-                            });
-                            content += `</ul></div>`;
-                        }
-                        content += `</div>`;
-                    });
-                    return content;
-                },
-
-                renderEditableContent(data, fileIndex) {
-                    let content = '';
-                    const createField = (label, value, path) => {
-                        if (value === undefined || value === null) return '';
-                        const editorId = `editor-${fileIndex}-${path.replace(/\./g, '-')}`;
-                        return `<div class="mb-4"><p class="font-semibold text-sm mb-1">${label}</p><div id="${editorId}"></div></div>`;
-                    };
-                    content += createField('البيان (Statement)', data.statement, 'statement');
-                    data.parts?.forEach((part, partIndex) => {
-                        content += `<div class="border-t pt-4 mt-4" style="border-color: var(--card-border);"><h5 class="font-semibold text-md mb-2" style="color: var(--secondary-text);">الجزء ${partIndex + 1}</h5>`;
-                        content += createField('السؤال (Stem)', part.stem, `parts.${partIndex}.stem`);
-                        content += createField('الإجابة (Answer)', part.answer, `parts.${partIndex}.answer`);
-                        if (part.choices) {
-                             content += `<div class="mb-3"><p class="font-semibold text-sm mb-1">الخيارات (Choices):</p><ul class="space-y-2">`;
-                            part.choices.forEach((choice, choiceIndex) => {
-                                content += `<li>${createField(`خيار ${choiceIndex + 1}`, choice.html_content, `parts.${partIndex}.choices.${choiceIndex}.html_content`)}</li>`;
-                            });
-                            content += `</ul></div>`;
-                        }
-                        content += `</div>`;
-                    });
-                    return content;
-                },
-
-                initEditorsForFile(fileIndex) {
-                    const fileData = TranslatorApp.state.translatedJsonData[fileIndex].data;
-                    const createEditor = (path, initialContent) => {
-                        const editorId = `editor-${fileIndex}-${path.replace(/\./g, '-')}`;
-                        const editorDiv = document.getElementById(editorId);
-                        if (!editorDiv) return;
-
-                        const quill = new Quill(editorDiv, {
-                            theme: 'snow',
-                            modules: { toolbar: [['bold', 'italic', 'underline'], [{ 'list': 'ordered'}, { 'list': 'bullet' }]] },
-                        });
-                        quill.root.innerHTML = initialContent || '';
-                        
-                        quill.on('text-change', () => {
-                            this.updateData(fileIndex, path, quill.root.innerHTML);
-                        });
-                        this.editorInstances.set(editorId, quill);
-                    };
-
-                    createEditor('statement', fileData.statement);
-                    fileData.parts?.forEach((part, partIndex) => {
-                        createEditor(`parts.${partIndex}.stem`, part.stem);
-                        createEditor(`parts.${partIndex}.answer`, part.answer);
-                        part.choices?.forEach((choice, choiceIndex) => {
-                            createEditor(`parts.${partIndex}.choices.${choiceIndex}.html_content`, choice.html_content);
-                        });
-                    });
-                },
-
-                updateData(fileIndex, path, value) {
-                    const keys = path.split('.');
-                    let current = TranslatorApp.state.translatedJsonData[fileIndex].data;
-                    for (let i = 0; i < keys.length - 1; i++) {
-                        current = current[keys[i]];
-                    }
-                    current[keys[keys.length - 1]] = value;
-                    TranslatorApp.history.push(TranslatorApp.state.translatedJsonData);
-                    TranslatorApp.state.hasUnsavedChanges = true;
-                },
-                
-                filter() {
-                    const searchTerm = TranslatorApp.dom.searchPreview.value.toLowerCase();
-                    const cards = document.querySelectorAll('.preview-card');
-                    
-                    cards.forEach(card => {
-                        const content = card.textContent.toLowerCase();
-                        const isVisible = content.includes(searchTerm);
-                        card.style.display = isVisible ? '' : 'none';
-                        
-                        // Highlight logic
-                        if (isVisible && searchTerm) {
-                           this.highlightInCard(card, searchTerm);
-                        } else {
-                           this.clearHighlight(card);
-                        }
-                    });
-                },
-
-                highlightInCard(card, term) {
-                    this.clearHighlight(card);
-                    const regex = new RegExp(`(${this.escapeRegex(term)})`, 'gi');
-                    
-                    const processNode = (node) => {
-                        if (node.nodeType === 3) { // Text node
-                            const text = node.textContent;
-                            if (text.toLowerCase().includes(term)) {
-                                const span = document.createElement('span');
-                                span.innerHTML = text.replace(regex, `<span class="search-highlight">$1</span>`);
-                                node.parentNode.replaceChild(span, node);
-                            }
-                        } else if (node.nodeType === 1 && node.nodeName !== 'SPAN' && !node.classList.contains('search-highlight')) {
-                            // Element node, recurse
-                            Array.from(node.childNodes).forEach(processNode);
-                        }
-                    };
-
-                    processNode(card);
-                },
-
-                clearHighlight(card) {
-                    const highlights = card.querySelectorAll('span.search-highlight');
-                    highlights.forEach(hl => {
-                        const parent = hl.parentNode;
-                        parent.replaceChild(document.createTextNode(hl.textContent), hl);
-                        parent.normalize();
-                    });
-                },
-
-                getTextNodes(node) {
-                    let all = [];
-                    for (node = node.firstChild; node; node = node.nextSibling) {
-                        if (node.nodeType === 3) all.push(node);
-                        else if (node.nodeName !== 'SCRIPT' && node.nodeName !== 'STYLE') {
-                            all = all.concat(this.getTextNodes(node));
-                        }
-                    }
-                    return all;
-                },
-                
-                escapeRegex(string) {
-                    return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
                 }
-            },
 
-            // --- EXPORT ---
-            export: {
-                async exportAs(format) {
-                    switch(format) {
-                        case 'csv': return this.toCsv();
-                        case 'json':
-                        default: return this.toJson();
-                    }
-                },
-                async toJson() {
-                    const useMappedIds = TranslatorApp.dom.useMappedIdsCheckbox.checked;
-                    let mappedIds = [];
-                    let idCounter = 0;
-
-                    if (useMappedIds) {
-                        try {
-                            mappedIds = JSON.parse(TranslatorApp.dom.mappedIdsInput.value);
-                            if (!Array.isArray(mappedIds)) {
-                                throw new Error("Input is not a JSON array.");
-                            }
-                        } catch (e) {
-                            TranslatorApp.ui.showAlert('قائمة المعرفات (mapped_id) غير صالحة. يرجى التأكد من أنها مصفوفة JSON صحيحة.', 'error');
-                            return;
+                const zip = new JSZip();
+                TranslatorApp.state.translatedJsonData.forEach(file => {
+                    const originalFile = TranslatorApp.state.originalJsonData.find(f => f.name === file.name);
+                    const finalData = JSON.parse(JSON.stringify(originalFile.data));
+                    
+                    // Handle mapped_id replacement
+                    if (useMappedIds && idCounter < mappedIds.length) {
+                        const newId = parseInt(mappedIds[idCounter], 10);
+                        if (!isNaN(newId)) {
+                            finalData.mapped_id = newId;
                         }
+                        idCounter++;
                     }
 
-                    const zip = new JSZip();
-                    TranslatorApp.state.translatedJsonData.forEach(file => {
-                        const originalFile = TranslatorApp.state.originalJsonData.find(f => f.name === file.name);
-                        const finalData = JSON.parse(JSON.stringify(originalFile.data));
-                        
-                        // Handle mapped_id replacement
-                        if (useMappedIds && idCounter < mappedIds.length) {
-                            const newId = parseInt(mappedIds[idCounter], 10);
-                            if (!isNaN(newId)) {
-                                finalData.mapped_id = newId;
-                            }
-                            idCounter++;
-                        }
+                    const updateField = (original, translated) => (translated !== undefined ? translated : original);
 
-                        const updateField = (original, translated) => (translated !== undefined ? translated : original);
-
-                        finalData.statement = updateField(originalFile.data.statement, file.data.statement);
-                        if (finalData.parts) {
-                            finalData.parts.forEach((part, partIndex) => {
-                                const translatedPart = file.data.parts[partIndex];
-                                if(translatedPart){
-                                    part.stem = updateField(part.stem, translatedPart.stem);
-                                    part.answer = updateField(part.answer, translatedPart.answer);
-                                    if (part.choices) {
-                                        part.choices.forEach((choice, choiceIndex) => {
-                                            if(translatedPart.choices && translatedPart.choices[choiceIndex]){
-                                                choice.html_content = updateField(choice.html_content, translatedPart.choices[choiceIndex].html_content);
-                                            }
-                                        });
-                                    }
+                    finalData.statement = updateField(originalFile.data.statement, file.data.statement);
+                    if (finalData.parts) {
+                        finalData.parts.forEach((part, partIndex) => {
+                            const translatedPart = file.data.parts[partIndex];
+                            if(translatedPart){
+                                part.stem = updateField(part.stem, translatedPart.stem);
+                                part.answer = updateField(part.answer, translatedPart.answer);
+                                if (part.choices) {
+                                    part.choices.forEach((choice, choiceIndex) => {
+                                        if(translatedPart.choices && translatedPart.choices[choiceIndex]){
+                                            choice.html_content = updateField(choice.html_content, translatedPart.choices[choiceIndex].html_content);
+                                        }
+                                    });
                                 }
-                            });
-                        }
-                        zip.file(file.name, JSON.stringify(finalData, null, 2));
-                    });
-
-                    if (useMappedIds && idCounter < TranslatorApp.state.translatedJsonData.length) {
-                        TranslatorApp.ui.showAlert(`تحذير: عدد المعرفات (${idCounter}) أقل من عدد الملفات (${TranslatorApp.state.translatedJsonData.length}). لم يتم تحديث جميع الملفات.`, 'error');
-                    }
-
-                    try {
-                        const content = await zip.generateAsync({ type: "blob" });
-                        const link = document.createElement("a");
-                        link.href = URL.createObjectURL(content);
-                        link.download = "translated_questions_json.zip";
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        TranslatorApp.ui.showAlert('تم إنشاء ملف ZIP بنجاح!', 'success');
-                    } catch (error) {
-                        console.error("Failed to generate zip file:", error);
-                        TranslatorApp.ui.showAlert('فشل إنشاء ملف ZIP.', 'error');
-                    }
-                },
-                async toCsv() {
-                    let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // Add BOM for Excel
-                    csvContent += "FileName,PartIndex,Type,OriginalText,TranslatedText\r\n";
-
-                    TranslatorApp.state.originalJsonData.forEach((originalFile, fileIndex) => {
-                        const translatedFile = TranslatorApp.state.translatedJsonData[fileIndex];
-                        const fileName = originalFile.name;
-
-                        const addRow = (partIndex, type, originalText, translatedText) => {
-                            const escape = (str) => {
-                                const div = document.createElement('div');
-                                div.innerHTML = str || '';
-                                return `"${(div.textContent || div.innerText || '').replace(/"/g, '""')}"`;
-                            };
-                            csvContent += [fileName, partIndex, type, escape(originalText), escape(translatedText)].join(',') + '\r\n';
-                        };
-
-                        addRow(0, 'statement', originalFile.data.statement, translatedFile.data.statement);
-                        originalFile.data.parts.forEach((part, partIndex) => {
-                            const translatedPart = translatedFile.data.parts[partIndex];
-                            addRow(partIndex + 1, 'stem', part.stem, translatedPart.stem);
-                            addRow(partIndex + 1, 'answer', part.answer, translatedPart.answer);
-                            part.choices.forEach((choice, choiceIndex) => {
-                                addRow(partIndex + 1, `choice_${choiceIndex + 1}`, choice.html_content, translatedPart.choices[choiceIndex].html_content);
-                            });
+                            }
                         });
-                    });
+                    }
+                    zip.file(file.name, JSON.stringify(finalData, null, 2));
+                });
 
-                    const encodedUri = encodeURI(csvContent);
+                if (useMappedIds && idCounter < TranslatorApp.state.translatedJsonData.length) {
+                    TranslatorApp.ui.showAlert(`تحذير: عدد المعرفات (${idCounter}) أقل من عدد الملفات (${TranslatorApp.state.translatedJsonData.length}). لم يتم تحديث جميع الملفات.`, 'error');
+                }
+
+                try {
+                    const content = await zip.generateAsync({ type: "blob" });
                     const link = document.createElement("a");
-                    link.setAttribute("href", encodedUri);
-                    link.setAttribute("download", "translated_data.csv");
+                    link.href = URL.createObjectURL(content);
+                    link.download = "translated_questions_json.zip";
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    TranslatorApp.ui.showAlert('تم إنشاء ملف CSV بنجاح!', 'success');
+                    TranslatorApp.ui.showAlert('تم إنشاء ملف ZIP بنجاح!', 'success');
+                } catch (error) {
+                    console.error("Failed to generate zip file:", error);
+                    TranslatorApp.ui.showAlert('فشل إنشاء ملف ZIP.', 'error');
                 }
-            }
-        };
-
-        document.addEventListener('DOMContentLoaded', () => TranslatorApp.init());
-
- // --- دالة جلب القاموس من Google Sheet مُصححة ---
-async function fetchGlossaryFromSheet(subject) {
-    // تحقق من أن المادة ليست "None"
-    if (!subject || subject === 'None') {
-        console.log('Subject is None, skipping glossary fetch');
-        return;
-    }
-
-    // استخدم الرابط المباشر للويب أب
-    const webAppUrl = 'https://script.google.com/macros/s/AKfycbzUGuESM-IhkKIG7aupf91Ia8cZSTqqt2Tj9QukUq9FAYvNOyyjYegJcv-wUp7DTFI/exec';
-    
-    TranslatorApp.ui.showAlert(`جاري جلب المصطلحات للمادة: ${subject}...`, 'info', 3000);
-    
-    try {
-        console.log('Fetching glossary for subject:', subject);
-        console.log('Using Web App URL:', webAppUrl);
-        
-        const requestBody = {
-            sheetId: GOOGLE_SHEET_ID,
-            subject: subject
-        };
-        
-        console.log('Request body:', requestBody);
-        
-        const response = await fetch(webAppUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
             },
-            body: JSON.stringify(requestBody),
-            mode: 'cors',
-            cache: 'no-cache'
-        });
-        
-        console.log('Response status:', response.status);
-        console.log('Response ok:', response.ok);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+            async toCsv() {
+                let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // Add BOM for Excel
+                csvContent += "FileName,PartIndex,Type,OriginalText,TranslatedText\r\n";
+
+                TranslatorApp.state.originalJsonData.forEach((originalFile, fileIndex) => {
+                    const translatedFile = TranslatorApp.state.translatedJsonData[fileIndex];
+                    const fileName = originalFile.name;
+
+                    const addRow = (partIndex, type, originalText, translatedText) => {
+                        const escape = (str) => {
+                            const div = document.createElement('div');
+                            div.innerHTML = str || '';
+                            return `"${(div.textContent || div.innerText || '').replace(/"/g, '""')}"`;
+                        };
+                        csvContent += [fileName, partIndex, type, escape(originalText), escape(translatedText)].join(',') + '\r\n';
+                    };
+
+                    addRow(0, 'statement', originalFile.data.statement, translatedFile.data.statement);
+                    originalFile.data.parts.forEach((part, partIndex) => {
+                        const translatedPart = translatedFile.data.parts[partIndex];
+                        addRow(partIndex + 1, 'stem', part.stem, translatedPart.stem);
+                        addRow(partIndex + 1, 'answer', part.answer, translatedPart.answer);
+                        part.choices.forEach((choice, choiceIndex) => {
+                            addRow(partIndex + 1, `choice_${choiceIndex + 1}`, choice.html_content, translatedPart.choices[choiceIndex].html_content);
+                        });
+                    });
+                });
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "translated_data.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                TranslatorApp.ui.showAlert('تم إنشاء ملف CSV بنجاح!', 'success');
+            }
         }
+    };
+
+    // --- دالة جلب القاموس من Google Sheet ---
+    async function fetchGlossaryFromSheet(subject) {
+        if (!subject || subject === 'None') {
+            console.log('Subject is None, skipping glossary fetch.');
+            return;
+        }
+
+        const webAppUrl = 'https://script.google.com/macros/s/AKfycbzUGuESM-IhkKIG7aupf91Ia8cZSTqqt2Tj9QukUq9FAYvNOyyjYegJcv-wUp7DTFI/exec';
+        TranslatorApp.ui.showAlert(`جاري جلب المصطلحات للمادة: ${subject}...`, 'info', 3000);
         
-        const responseText = await response.text();
-        console.log('Raw response:', responseText.substring(0, 200) + '...'); // Log first 200 chars
-        
-        let result;
         try {
-            result = JSON.parse(responseText);
-        } catch (parseError) {
-            console.error('JSON parsing error:', parseError);
-            console.log('Full response that failed to parse:', responseText);
-            throw new Error('استجابة غير صالحة من الخادم - ليس JSON صحيح');
-        }
-        
-        console.log('Parsed result:', result);
-        
-        if (result.error) {
-            throw new Error(`خطأ من الخادم: ${result.error}`);
-        }
-        
-        if (result.success && Array.isArray(result.glossary)) {
-            // أضف فقط المصطلحات الجديدة غير المكررة
-            const newEntries = result.glossary.filter(entry => {
-                if (!entry.term || !entry.translation) {
-                    console.warn('Skipping entry with missing term or translation:', entry);
-                    return false;
-                }
-                
-                const termLower = entry.term.toLowerCase().trim();
-                const exists = TranslatorApp.state.glossary.some(existing => 
-                    existing.term.toLowerCase().trim() === termLower
-                );
-                
-                if (exists) {
-                    console.log('Skipping duplicate term:', entry.term);
-                }
-                
-                return !exists;
-            }).map(entry => ({
-                term: entry.term.trim(),
-                translation: entry.translation.trim(),
-                category: subject,
-                dateAdded: new Date().toISOString(),
-                source: 'google_sheet'
-            }));
+            const requestBody = {
+                sheetId: GOOGLE_SHEET_ID,
+                subject: subject
+            };
             
-            console.log(`Processing ${result.glossary.length} terms, adding ${newEntries.length} new ones`);
+            const response = await fetch(webAppUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+                mode: 'cors',
+                cache: 'no-cache'
+            });
             
-            TranslatorApp.state.glossary = [...TranslatorApp.state.glossary, ...newEntries];
-            TranslatorApp.glossary.render();
-            TranslatorApp.state.hasUnsavedChanges = true;
-            
-            if (newEntries.length > 0) {
-                TranslatorApp.ui.showAlert(
-                    `✅ تم إضافة ${newEntries.length} مصطلح جديد للمادة: ${subject}`, 
-                    'success'
-                );
-            } else {
-                TranslatorApp.ui.showAlert(
-                    `ℹ️ تم العثور على ${result.glossary.length} مصطلح للمادة ${subject}، لكن جميعها موجودة مسبقاً`, 
-                    'info'
-                );
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
             }
             
-        } else if (!result.success && result.message) {
-            TranslatorApp.ui.showAlert(`رسالة من الخادم: ${result.message}`, 'info');
-        } else {
-            throw new Error('هيكل البيانات المُستلمة غير صحيح أو لا توجد مصطلحات');
-        }
-        
-    } catch (error) {
-        console.error('Fetch glossary error:', error);
-        
-        let errorMessage = 'حدث خطأ أثناء جلب المصطلحات: ';
-        
-        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-            errorMessage += 'لا يمكن الوصول للخادم. تأكد من:\n• الاتصال بالإنترنت\n• صحة رابط الويب أب\n• نشر الويب أب بالأذونات الصحيحة';
-        } else if (error.message.includes('CORS')) {
-            errorMessage += 'مشكلة في أذونات CORS. تأكد من نشر الويب أب للجميع (Anyone)';
-        } else if (error.message.includes('HTTP error')) {
-            errorMessage += `خطأ في الخادم: ${error.message}`;
-        } else {
-            errorMessage += error.message;
-        }
-        
-        TranslatorApp.ui.showAlert(errorMessage, 'error', 10000);
-        
-        // اقتراح حل بديل
-        setTimeout(() => {
-            TranslatorApp.ui.showAlert(
-                '💡 حل بديل: يمكنك إضافة المصطلحات يدوياً من خلال "إدارة القاموس المخصص"', 
-                'info', 
-                8000
-            );
-        }, 2000);
-    }
-}
-
-// تحديث دالة apply في subjects مع إزالة المرجع المعطل
-TranslatorApp.subjects.apply = async function() {
-    TranslatorApp.state.selectedSubject = TranslatorApp.dom.subjectSelect.value;
-    TranslatorApp.state.selectedGrade = TranslatorApp.dom.gradeSelect.value;
-    TranslatorApp.state.hasUnsavedChanges = true;
-    TranslatorApp.ui.showSubjectsModal(false);
-    
-    TranslatorApp.ui.showAlert(
-        `تم تطبيق إعدادات: ${TranslatorApp.state.selectedSubject} - ${TranslatorApp.state.selectedGrade}`,
-        'success'
-    );
-    
-    // جلب القاموس من الشيت بعد اختيار المادة
-    if (TranslatorApp.state.selectedSubject !== 'None') {
-        try {
-            await fetchGlossaryFromSheet(TranslatorApp.state.selectedSubject);
+            const result = await response.json();
+            
+            if (result.error) {
+                throw new Error(`خطأ من الخادم: ${result.error}`);
+            }
+            
+            if (result.success && Array.isArray(result.glossary)) {
+                const newEntries = result.glossary.filter(entry => {
+                    if (!entry.term || !entry.translation) return false;
+                    const termLower = entry.term.toLowerCase().trim();
+                    return !TranslatorApp.state.glossary.some(existing => existing.term.toLowerCase().trim() === termLower);
+                }).map(entry => ({
+                    term: entry.term.trim(),
+                    translation: entry.translation.trim(),
+                    category: subject,
+                    dateAdded: new Date().toISOString(),
+                    source: 'google_sheet'
+                }));
+                
+                if (newEntries.length > 0) {
+                    TranslatorApp.state.glossary = [...TranslatorApp.state.glossary, ...newEntries];
+                    TranslatorApp.glossary.render();
+                    TranslatorApp.state.hasUnsavedChanges = true;
+                    TranslatorApp.ui.showAlert(`✅ تم إضافة ${newEntries.length} مصطلح جديد للمادة: ${subject}`, 'success');
+                } else {
+                    TranslatorApp.ui.showAlert(`ℹ️ تم العثور على ${result.glossary.length} مصطلح للمادة ${subject}، لكن جميعها موجودة مسبقاً`, 'info');
+                }
+            } else if (!result.success && result.message) {
+                TranslatorApp.ui.showAlert(`رسالة من الخادم: ${result.message}`, 'info');
+            } else {
+                throw new Error('هيكل البيانات المُستلمة غير صحيح أو لا توجد مصطلحات');
+            }
+            
         } catch (error) {
-            console.error('Error in subjects.apply:', error);
+            console.error('Fetch glossary error:', error);
+            let errorMessage = 'حدث خطأ أثناء جلب المصطلحات. قد يكون السبب مشكلة في الشبكة أو في خدمة Google Sheets. يمكنك إضافة المصطلحات يدوياً.';
+            TranslatorApp.ui.showAlert(errorMessage, 'error', 10000);
         }
     }
-};
 
-// دالة مساعدة لاختبار الاتصال بالويب أب
-window.testGlossaryConnection = async function() {
-    console.log('🔍 اختبار الاتصال بالويب أب...');
-    try {
-        await fetchGlossaryFromSheet('Mathematics');
-    } catch (error) {
-        console.error('اختبار الاتصال فشل:', error);
-    }
-};
-        // عدل دالة apply في TranslatorApp.subjects:
-        TranslatorApp.subjects.apply = async function() {
-            TranslatorApp.state.selectedSubject = TranslatorApp.dom.subjectSelect.value;
-            TranslatorApp.state.selectedGrade = TranslatorApp.dom.gradeSelect.value;
-            TranslatorApp.state.hasUnsavedChanges = true;
-            TranslatorApp.ui.showSubjectsModal(false);
-            TranslatorApp.ui.showAlert(
-                `تم تطبيق إعدادات: ${TranslatorApp.state.selectedSubject} - ${TranslatorApp.state.selectedGrade}`,
-                'success'
-            );
-            // جلب القاموس من الشيت بعد اختيار المادة
-            await fetchGlossaryFromSheet(TranslatorApp.state.selectedSubject);
-        };
+    document.addEventListener('DOMContentLoaded', () => TranslatorApp.init());
     </script>
 </body>
 </html>
