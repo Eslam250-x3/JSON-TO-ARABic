@@ -56,7 +56,7 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        input, select {
+        input, select, textarea {
             background-color: var(--input-bg);
             border: 1px solid var(--input-border);
         }
@@ -181,6 +181,11 @@
                             <label for="useGlossaryCheckbox" class="mr-2 text-sm font-medium">استخدام القاموس</label>
                         </div>
                     </div>
+                    
+                    <div class="flex items-center justify-between p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));">
+                        <button id="manageIdsBtn" type="button" class="font-semibold" style="color: var(--primary-color);">🆔 إدارة معرفات الأسئلة (mapped_id)</button>
+                    </div>
+
                 </div>
 
                 <!-- Right Column: File Upload -->
@@ -198,7 +203,7 @@
                 </div>
             </div>
             
-            <button id="translateBtn" class="w-full text-white font-bold py-3 px-6 rounded-lg transition-transform transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none mt-6" style="background-color: var(--primary-color);">
+            <button id="translateBtn" class="w-full text-white font-bold py-3 px-6 rounded-lg transition-transform transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none mt-8" style="background-color: var(--primary-color);">
                 ترجمة الملفات (Ctrl + Enter)
             </button>
         </div>
@@ -271,7 +276,7 @@
             <!-- Glossary Controls -->
             <div class="flex flex-wrap gap-2 mb-4">
                 <button id="importGlossaryBtn" class="flex-1 px-4 py-2 text-white rounded-lg" style="background-color: var(--primary-color);">استيراد</button>
-                <button id="exportGlossaryBtn" class="flex-1 px-4 py-2 text-white rounded-lg" style="background-color: var(--success-color);">تصدير</button>
+                <button id="exportGlossaryBtn" class="flex-1 px-4 py-2 text-white rounded-lg" style="background-color: var(--success-color);">تصدير (CSV)</button>
                 <input type="file" id="glossaryFileInput" accept=".json" class="hidden">
             </div>
             <input type="text" id="glossarySearch" placeholder="البحث في القاموس..." class="w-full p-2 mb-4 border rounded-lg">
@@ -296,6 +301,28 @@
             </div>
         </div>
     </div>
+    
+    <!-- Mapped IDs Modal -->
+    <div id="mappedIdsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div class="main-card rounded-2xl shadow-xl p-6 w-full max-w-2xl transform transition-all">
+            <div class="flex justify-between items-center">
+                <h3 class="text-2xl font-bold" style="color: var(--primary-color);">إدارة معرفات الأسئلة (mapped_id)</h3>
+                <button id="closeMappedIdsModalBtn" class="text-2xl hover:opacity-75">&times;</button>
+            </div>
+            <p class="text-sm mt-1 mb-4" style="color: var(--secondary-text);">
+                ألصق هنا مصفوفة JSON من المعرفات الجديدة ليتم تعيينها للملفات بالترتيب عند التصدير.
+            </p>
+            <a href="https://12digit.nagwa.com/get.bulk.codes/0/cps/cps.system/" target="_blank" class="inline-block w-full text-center mb-4 px-4 py-2 text-sm text-white rounded-lg" style="background-color: var(--primary-color);">
+                الحصول على الأكواد من Nagwa
+            </a>
+            <textarea id="mappedIdsInput" rows="5" class="w-full p-2 rounded-lg mb-4" placeholder='["...","..."]'></textarea>
+            <div class="flex items-center">
+                <input id="useMappedIdsCheckbox" type="checkbox" class="h-4 w-4 rounded focus:ring-2" style="color: var(--primary-color); border-color: var(--input-border); focus-ring-color: var(--primary-color);">
+                <label for="useMappedIdsCheckbox" class="mr-2 text-sm font-medium">تفعيل استبدال المعرفات عند التصدير</label>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         const TranslatorApp = {
@@ -342,7 +369,10 @@
                     searchPreview: 'searchPreview', undoBtn: 'undoBtn', redoBtn: 'redoBtn',
                     importGlossaryBtn: 'importGlossaryBtn', exportGlossaryBtn: 'exportGlossaryBtn',
                     glossaryFileInput: 'glossaryFileInput', glossarySearch: 'glossarySearch',
-                    glossaryCategory: 'glossaryCategory'
+                    glossaryCategory: 'glossaryCategory',
+                    mappedIdsInput: 'mappedIdsInput', useMappedIdsCheckbox: 'useMappedIdsCheckbox',
+                    manageIdsBtn: 'manageIdsBtn', mappedIdsModal: 'mappedIdsModal',
+                    closeMappedIdsModalBtn: 'closeMappedIdsModalBtn'
                 };
                 for (const key in elementMap) { this.dom[key] = document.getElementById(elementMap[key]); }
                 this.dom.apiProviderRadios = document.querySelectorAll('input[name="apiProvider"]');
@@ -363,6 +393,8 @@
                 this.dom.geminiKeyInput.addEventListener('input', () => this.state.hasUnsavedChanges = true);
                 this.dom.chatgptKeyInput.addEventListener('input', () => this.state.hasUnsavedChanges = true);
                 this.dom.themeToggle.addEventListener('click', this.theme.toggle.bind(this));
+                this.dom.mappedIdsInput.addEventListener('input', () => this.state.hasUnsavedChanges = true);
+                this.dom.useMappedIdsCheckbox.addEventListener('change', () => this.state.hasUnsavedChanges = true);
                 
                 // Preview Events
                 this.dom.searchPreview.addEventListener('input', this.preview.filter.bind(this.preview));
@@ -377,6 +409,10 @@
                 this.dom.importGlossaryBtn.addEventListener('click', () => this.dom.glossaryFileInput.click());
                 this.dom.glossaryFileInput.addEventListener('change', (e) => this.glossary.import(e.target.files[0]));
                 this.dom.glossarySearch.addEventListener('input', (e) => this.glossary.filter(e.target.value));
+                
+                // Mapped IDs Events
+                this.dom.manageIdsBtn.addEventListener('click', () => this.ui.showMappedIdsModal(true));
+                this.dom.closeMappedIdsModalBtn.addEventListener('click', () => this.ui.showMappedIdsModal(false));
             },
             
             events: {
@@ -487,6 +523,8 @@
                         translatedJsonData: TranslatorApp.state.translatedJsonData,
                         glossary: TranslatorApp.state.glossary,
                         activeScreen: TranslatorApp.state.activeScreen,
+                        mappedIds: TranslatorApp.dom.mappedIdsInput.value,
+                        useMappedIds: TranslatorApp.dom.useMappedIdsCheckbox.checked
                     };
                     localStorage.setItem('translatorSession', JSON.stringify(sessionData));
                     TranslatorApp.state.hasUnsavedChanges = false;
@@ -504,6 +542,8 @@
                     TranslatorApp.state.translatedJsonData = sessionData.translatedJsonData || [];
                     TranslatorApp.state.glossary = sessionData.glossary || [];
                     TranslatorApp.state.activeScreen = sessionData.activeScreen || 'setup';
+                    TranslatorApp.dom.mappedIdsInput.value = sessionData.mappedIds || '[]';
+                    TranslatorApp.dom.useMappedIdsCheckbox.checked = sessionData.useMappedIds || false;
                     
                     if (sessionData.selectedProvider) {
                         document.querySelector(`input[name="apiProvider"][value="${sessionData.selectedProvider}"]`).checked = true;
@@ -639,16 +679,25 @@
                     if (TranslatorApp.state.glossary.length === 0) {
                         return TranslatorApp.ui.showAlert('القاموس فارغ، لا يوجد شيء لتصديره.', 'error');
                     }
-                    const data = JSON.stringify(TranslatorApp.state.glossary, null, 2);
-                    const blob = new Blob([data], { type: 'application/json;charset=utf-8' });
+
+                    const escapeCSV = (str) => `"${(str || '').toString().replace(/"/g, '""')}"`;
+                    
+                    let csvContent = '"term","translation"\r\n';
+
+                    TranslatorApp.state.glossary.forEach(entry => {
+                        csvContent += `${escapeCSV(entry.term)},${escapeCSV(entry.translation)}\r\n`;
+                    });
+
+                    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'translator_glossary.json';
+                    a.download = 'translator_glossary.csv';
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
+                    TranslatorApp.ui.showAlert('تم تصدير القاموس بنجاح كملف CSV.', 'success');
                 },
                 async import(file) {
                     if (!file) return;
@@ -972,6 +1021,7 @@
                     fileList.querySelectorAll('.remove-file-btn').forEach(btn => { btn.onclick = () => TranslatorApp.fileHandler.removeFile(parseInt(btn.dataset.index)); });
                 },
                 showGlossaryModal(show) { TranslatorApp.dom.glossaryModal.classList.toggle('hidden', !show); },
+                showMappedIdsModal(show) { TranslatorApp.dom.mappedIdsModal.classList.toggle('hidden', !show); },
                 renderGlossaryList(list) {
                     const { glossaryListContainer } = TranslatorApp.dom;
                     glossaryListContainer.innerHTML = '';
@@ -1066,7 +1116,6 @@
                     let content = '';
                     const createField = (label, value) => {
                         if (value === undefined || value === null) return '';
-                        // FIX: Changed this.security to TranslatorApp.security
                         return `<div class="mb-4"><p class="font-semibold text-sm mb-1">${label}</p><div class="p-3 rounded-lg text-sm" style="background-color: var(--bg-color);">${TranslatorApp.security.sanitize(value)}</div></div>`;
                     };
                     content += createField('البيان (Statement)', data.statement);
@@ -1077,7 +1126,6 @@
                         if (part.choices) {
                             content += `<div class="mb-3"><p class="font-semibold text-sm mb-1">الخيارات (Choices):</p><ul class="list-disc list-inside space-y-2 mr-4">`;
                             part.choices.forEach(choice => {
-                                // FIX: Changed this.security to TranslatorApp.security
                                 content += `<li><div class="p-2 rounded-lg text-sm" style="background-color: var(--bg-color);">${TranslatorApp.security.sanitize(choice.html_content)}</div></li>`;
                             });
                             content += `</ul></div>`;
@@ -1225,11 +1273,36 @@
                     }
                 },
                 async toJson() {
+                    const useMappedIds = TranslatorApp.dom.useMappedIdsCheckbox.checked;
+                    let mappedIds = [];
+                    let idCounter = 0;
+
+                    if (useMappedIds) {
+                        try {
+                            mappedIds = JSON.parse(TranslatorApp.dom.mappedIdsInput.value);
+                            if (!Array.isArray(mappedIds)) {
+                                throw new Error("Input is not a JSON array.");
+                            }
+                        } catch (e) {
+                            TranslatorApp.ui.showAlert('قائمة المعرفات (mapped_id) غير صالحة. يرجى التأكد من أنها مصفوفة JSON صحيحة.', 'error');
+                            return;
+                        }
+                    }
+
                     const zip = new JSZip();
                     TranslatorApp.state.translatedJsonData.forEach(file => {
                         const originalFile = TranslatorApp.state.originalJsonData.find(f => f.name === file.name);
                         const finalData = JSON.parse(JSON.stringify(originalFile.data));
                         
+                        // Handle mapped_id replacement
+                        if (useMappedIds && idCounter < mappedIds.length) {
+                            const newId = parseInt(mappedIds[idCounter], 10);
+                            if (!isNaN(newId)) {
+                                finalData.mapped_id = newId;
+                            }
+                            idCounter++;
+                        }
+
                         const updateField = (original, translated) => (translated !== undefined ? translated : original);
 
                         finalData.statement = updateField(originalFile.data.statement, file.data.statement);
@@ -1251,6 +1324,11 @@
                         }
                         zip.file(file.name, JSON.stringify(finalData, null, 2));
                     });
+
+                    if (useMappedIds && idCounter < TranslatorApp.state.translatedJsonData.length) {
+                        TranslatorApp.ui.showAlert(`تحذير: عدد المعرفات (${idCounter}) أقل من عدد الملفات (${TranslatorApp.state.translatedJsonData.length}). لم يتم تحديث جميع الملفات.`, 'error');
+                    }
+
                     try {
                         const content = await zip.generateAsync({ type: "blob" });
                         const link = document.createElement("a");
