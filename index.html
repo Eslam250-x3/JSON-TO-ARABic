@@ -27,7 +27,6 @@
             background-color: #f0f9ff;
             border-radius: 4px;
         }
-        /* Custom styles for radio buttons */
         .api-selector input[type="radio"]:checked + label {
             border-color: #4f46e5;
             background-color: #eef2ff;
@@ -36,15 +35,32 @@
         .editable-content {
             white-space: pre-wrap;
         }
+        /* Styles for the new alert system */
+        .alert {
+            transition: all 0.5s ease-in-out;
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .alert.fade-out {
+            opacity: 0;
+            transform: translateX(100%);
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
 
+    <!-- Container for alerts -->
+    <div id="alertContainer" class="fixed top-0 right-0 p-4 w-full max-w-md z-50 space-y-3"></div>
+
     <div class="container mx-auto p-4 md:p-8 max-w-4xl">
-        <header class="text-center mb-8">
-            <h1 class="text-4xl md:text-5xl font-bold text-indigo-600">🌍 مترجم الأسئلة المحترف</h1>
-            <p class="text-gray-600 mt-2 text-lg">ترجمة ملفات JSON، مع إمكانية المعاينة والتعديل قبل التصدير</p>
-        </header>
+        <div class="flex justify-between items-center mb-4">
+             <h1 class="text-4xl md:text-5xl font-bold text-indigo-600">🌍 مترجم الأسئلة المحترف</h1>
+             <button id="newSessionBtn" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition">
+                بدء جلسة جديدة
+            </button>
+        </div>
+        <p class="text-gray-600 mt-2 mb-8 text-center text-lg">ترجمة ملفات JSON، مع إمكانية المعاينة والتعديل قبل التصدير</p>
+        
 
         <!-- Step 1: Settings and Upload -->
         <div id="setupSection" class="bg-white p-6 rounded-2xl shadow-lg mb-6">
@@ -113,15 +129,15 @@
         <!-- Step 3: Preview and Edit -->
         <div id="previewSection" class="hidden">
              <div class="bg-white p-6 rounded-2xl shadow-lg mb-6">
-                <h3 class="text-2xl font-bold mb-4 text-green-700 border-b-2 border-green-200 pb-2">الخطوة 2: معاينة وتعديل الترجمة</h3>
-                <p class="text-gray-600 mb-6">تمت ترجمة النصوص. يمكنك الآن مراجعتها وتعديل أي نص مباشرة بالضغط عليه. التعديلات تُحفظ تلقائياً.</p>
-                <div id="previewContainer" class="space-y-6">
-                    <!-- Preview cards will be inserted here -->
-                </div>
+                 <h3 class="text-2xl font-bold mb-4 text-green-700 border-b-2 border-green-200 pb-2">الخطوة 2: معاينة وتعديل الترجمة</h3>
+                 <p class="text-gray-600 mb-6">تمت ترجمة النصوص. يمكنك الآن مراجعتها وتعديل أي نص مباشرة بالضغط عليه. التعديلات تُحفظ تلقائياً.</p>
+                 <div id="previewContainer" class="space-y-6">
+                     <!-- Preview cards will be inserted here -->
+                 </div>
              </div>
              <button id="generateBtn" class="w-full bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-transform transform hover:scale-105">
-                تصدير الملفات المترجمة (JSON)
-            </button>
+                 تصدير الملفات المترجمة (JSON)
+             </button>
         </div>
 
     </div>
@@ -154,537 +170,498 @@
     </div>
 
     <script>
-        // --- DOM Elements ---
-        const fileUpload = document.getElementById('fileUpload');
-        const fileInput = document.getElementById('fileInput');
-        const fileList = document.getElementById('fileList');
-        const translateBtn = document.getElementById('translateBtn');
-        const geminiKeyInput = document.getElementById('geminiKey');
-        const chatgptKeyInput = document.getElementById('chatgptKey');
-        const geminiKeyGroup = document.getElementById('geminiKeyGroup');
-        const chatgptKeyGroup = document.getElementById('chatgptKeyGroup');
-        const apiProviderRadios = document.querySelectorAll('input[name="apiProvider"]');
-        
-        const setupSection = document.getElementById('setupSection');
-        const progressContainer = document.getElementById('progressContainer');
-        const progressText = document.getElementById('progressText');
-        const previewSection = document.getElementById('previewSection');
-        const previewContainer = document.getElementById('previewContainer');
-        const generateBtn = document.getElementById('generateBtn');
+        const TranslatorApp = {
+            // --- STATE ---
+            state: {
+                selectedFilesInfo: [],
+                originalJsonData: [],
+                translatedJsonData: [],
+                glossary: [],
+                activeScreen: 'setup',
+                translationCache: new Map(),
+            },
 
-        // Glossary Elements
-        const manageGlossaryBtn = document.getElementById('manageGlossaryBtn');
-        const glossaryModal = document.getElementById('glossaryModal');
-        const closeGlossaryModalBtn = document.getElementById('closeGlossaryModalBtn');
-        const addGlossaryTermBtn = document.getElementById('addGlossaryTermBtn');
-        const glossaryTermInput = document.getElementById('glossaryTerm');
-        const glossaryTranslationInput = document.getElementById('glossaryTranslation');
-        const glossaryListContainer = document.getElementById('glossaryListContainer');
-        const useGlossaryCheckbox = document.getElementById('useGlossaryCheckbox');
+            // --- DOM ELEMENTS ---
+            dom: {},
 
-        // --- State Variables ---
-        let selectedFiles = [];
-        let originalJsonData = [];
-        let translatedJsonData = [];
-        let glossary = [];
+            // --- INITIALIZATION ---
+            init() {
+                this.cacheDomElements();
+                this.bindEvents();
+                this.session.load();
+            },
 
-        // --- Event Listeners ---
-        document.addEventListener('DOMContentLoaded', () => {
-            geminiKeyInput.value = localStorage.getItem('geminiApiKey') || '';
-            chatgptKeyInput.value = localStorage.getItem('chatgptApiKey') || '';
-            loadGlossary();
-        });
-
-        apiProviderRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                if (e.target.value === 'gemini') {
-                    geminiKeyGroup.classList.remove('hidden');
-                    chatgptKeyGroup.classList.add('hidden');
-                } else {
-                    geminiKeyGroup.classList.add('hidden');
-                    chatgptKeyGroup.classList.remove('hidden');
-                }
-            });
-        });
-
-        fileUpload.addEventListener('click', () => fileInput.click());
-        fileUpload.addEventListener('dragover', (e) => { e.preventDefault(); fileUpload.classList.add('dragover'); });
-        fileUpload.addEventListener('dragleave', () => fileUpload.classList.remove('dragover'));
-        fileUpload.addEventListener('drop', handleFileDrop);
-        fileInput.addEventListener('change', handleFileSelect);
-
-        translateBtn.addEventListener('click', startTranslationProcess);
-        generateBtn.addEventListener('click', generateFinalJsonFiles);
-
-        // Glossary Listeners
-        manageGlossaryBtn.addEventListener('click', () => glossaryModal.classList.remove('hidden'));
-        closeGlossaryModalBtn.addEventListener('click', () => glossaryModal.classList.add('hidden'));
-        addGlossaryTermBtn.addEventListener('click', addGlossaryTerm);
-
-        // --- Functions ---
-
-        function handleFileDrop(e) {
-            e.preventDefault();
-            fileUpload.classList.remove('dragover');
-            const files = Array.from(e.dataTransfer.files).filter(file => file.name.endsWith('.json'));
-            addFiles(files);
-        }
-
-        function handleFileSelect(e) {
-            const files = Array.from(e.target.files).filter(file => file.name.endsWith('.json'));
-            addFiles(files);
-        }
-
-        function addFiles(newFiles) {
-            newFiles.forEach(file => {
-                if (!selectedFiles.some(f => f.name === file.name)) {
-                    selectedFiles.push(file);
-                }
-            });
-            renderFileList();
-        }
-
-        function renderFileList() {
-            fileList.innerHTML = '';
-            if (selectedFiles.length === 0) return;
-
-            const listContainer = document.createElement('ul');
-            listContainer.className = 'my-4 space-y-2';
-            selectedFiles.forEach((file, index) => {
-                const listItem = document.createElement('li');
-                listItem.className = 'flex justify-between items-center bg-gray-100 p-2 rounded-lg';
-                listItem.innerHTML = `
-                    <span class="font-medium text-gray-800">${file.name}</span>
-                    <button onclick="removeFile(${index})" class="text-red-500 hover:text-red-700 font-bold text-xl">&times;</button>
-                `;
-                listContainer.appendChild(listItem);
-            });
-            fileList.appendChild(listContainer);
-        }
-
-        function removeFile(index) {
-            selectedFiles.splice(index, 1);
-            renderFileList();
-        }
-
-        function showAlert(message, type = 'error') {
-            const color = type === 'error' ? 'red' : 'green';
-            const alertBox = document.createElement('div');
-            alertBox.className = `fixed top-5 right-5 bg-${color}-500 text-white p-4 rounded-lg shadow-xl animate-pulse z-50`;
-            alertBox.textContent = message;
-            document.body.appendChild(alertBox);
-            setTimeout(() => alertBox.remove(), 4000);
-        }
-
-        // --- Glossary Functions ---
-        function loadGlossary() {
-            const savedGlossary = localStorage.getItem('customGlossary');
-            if (savedGlossary) {
-                glossary = JSON.parse(savedGlossary);
-            }
-            renderGlossaryList();
-        }
-
-        function saveGlossary() {
-            localStorage.setItem('customGlossary', JSON.stringify(glossary));
-        }
-
-        function addGlossaryTerm() {
-            const term = glossaryTermInput.value.trim();
-            const translation = glossaryTranslationInput.value.trim();
-
-            if (term && translation) {
-                if (glossary.some(entry => entry.term.toLowerCase() === term.toLowerCase())) {
-                    showAlert('هذا المصطلح موجود بالفعل في القاموس.');
-                    return;
-                }
-                glossary.push({ term, translation });
-                glossaryTermInput.value = '';
-                glossaryTranslationInput.value = '';
-                saveGlossary();
-                renderGlossaryList();
-            } else {
-                showAlert('يرجى إدخال المصطلح وترجمته.');
-            }
-        }
-
-        function deleteGlossaryTerm(index) {
-            glossary.splice(index, 1);
-            saveGlossary();
-            renderGlossaryList();
-        }
-
-        function renderGlossaryList() {
-            glossaryListContainer.innerHTML = '';
-            if (glossary.length === 0) {
-                glossaryListContainer.innerHTML = '<p class="text-center text-gray-500">القاموس فارغ حاليًا.</p>';
-                return;
-            }
-            const list = document.createElement('ul');
-            list.className = 'space-y-2';
-            glossary.forEach((entry, index) => {
-                const listItem = document.createElement('li');
-                listItem.className = 'flex justify-between items-center p-2 bg-white rounded-md border';
-                listItem.innerHTML = `
-                    <div>
-                        <span class="font-semibold">${entry.term}</span>
-                        <span class="text-gray-500 mx-2">→</span>
-                        <span>${entry.translation}</span>
-                    </div>
-                    <button onclick="deleteGlossaryTerm(${index})" class="text-red-500 hover:text-red-700 font-bold">&times;</button>
-                `;
-                list.appendChild(listItem);
-            });
-            glossaryListContainer.appendChild(list);
-        }
-        
-        function applyGlossary(text, currentGlossary) {
-            if (!text || !currentGlossary || currentGlossary.length === 0) {
-                return { modifiedText: text, placeholders: {} };
-            }
-
-            let modifiedText = text;
-            const placeholders = {};
-            let placeholderIndex = 0;
-
-            // Sort glossary by length descending to match longer phrases first
-            const sortedGlossary = [...currentGlossary].sort((a, b) => b.term.length - a.term.length);
-
-            sortedGlossary.forEach(entry => {
-                // Use a regex to find the term as a whole word, case-insensitive
-                const regex = new RegExp(`\\b${entry.term}\\b`, 'gi');
-                modifiedText = modifiedText.replace(regex, (match) => {
-                    const placeholder = `__GLOSSARY_${placeholderIndex}__`;
-                    placeholders[placeholder] = entry.translation;
-                    placeholderIndex++;
-                    return placeholder;
-                });
-            });
-
-            return { modifiedText, placeholders };
-        }
-
-        function revertPlaceholders(text, placeholders) {
-            if (Object.keys(placeholders).length === 0) return text;
-            let resultText = text;
-            for (const placeholder in placeholders) {
-                resultText = resultText.replaceAll(placeholder, placeholders[placeholder]);
-            }
-            return resultText;
-        }
-
-
-        async function startTranslationProcess() {
-            const apiProvider = document.querySelector('input[name="apiProvider"]:checked').value;
-            const apiKey = (apiProvider === 'gemini' ? geminiKeyInput.value : chatgptKeyInput.value).trim();
-
-            if (!apiKey) {
-                showAlert(`الرجاء إدخال مفتاح API لـ ${apiProvider === 'gemini' ? 'Gemini' : 'ChatGPT'}.`);
-                return;
-            }
-            if (selectedFiles.length === 0) {
-                showAlert('الرجاء اختيار ملف JSON واحد على الأقل.');
-                return;
-            }
-
-            if (apiProvider === 'gemini') {
-                localStorage.setItem('geminiApiKey', apiKey);
-            } else {
-                localStorage.setItem('chatgptApiKey', apiKey);
-            }
+            cacheDomElements() {
+                const elementMap = {
+                    alertContainer: 'alertContainer', newSessionBtn: 'newSessionBtn',
+                    fileUpload: 'fileUpload', fileInput: 'fileInput', fileList: 'fileList',
+                    translateBtn: 'translateBtn', geminiKeyInput: 'geminiKey', chatgptKeyInput: 'chatgptKey',
+                    geminiKeyGroup: 'geminiKeyGroup', chatgptKeyGroup: 'chatgptKeyGroup',
+                    setupSection: 'setupSection', progressContainer: 'progressContainer', progressText: 'progressText',
+                    previewSection: 'previewSection', previewContainer: 'previewContainer', generateBtn: 'generateBtn',
+                    manageGlossaryBtn: 'manageGlossaryBtn', glossaryModal: 'glossaryModal',
+                    closeGlossaryModalBtn: 'closeGlossaryModalBtn', addGlossaryTermBtn: 'addGlossaryTermBtn',
+                    glossaryTermInput: 'glossaryTerm', glossaryTranslationInput: 'glossaryTranslation',
+                    glossaryListContainer: 'glossaryListContainer', useGlossaryCheckbox: 'useGlossaryCheckbox'
+                };
+                for (const key in elementMap) { this.dom[key] = document.getElementById(elementMap[key]); }
+                this.dom.apiProviderRadios = document.querySelectorAll('input[name="apiProvider"]');
+            },
             
-            // UI transition
-            setupSection.classList.add('hidden');
-            progressContainer.classList.remove('hidden');
-            previewSection.classList.add('hidden');
-            translateBtn.disabled = true;
+            // --- EVENTS ---
+            bindEvents() {
+                this.dom.newSessionBtn.addEventListener('click', this.session.clear.bind(this));
+                this.dom.apiProviderRadios.forEach(radio => radio.addEventListener('change', this.events.onApiProviderChange.bind(this)));
+                this.dom.fileUpload.addEventListener('click', () => this.dom.fileInput.click());
+                this.dom.fileUpload.addEventListener('dragover', this.events.onDragOver);
+                this.dom.fileUpload.addEventListener('dragleave', this.events.onDragLeave);
+                this.dom.fileUpload.addEventListener('drop', this.events.onFileDrop.bind(this));
+                this.dom.fileInput.addEventListener('change', this.events.onFileSelect.bind(this));
+                this.dom.translateBtn.addEventListener('click', this.startTranslationProcess.bind(this));
+                this.dom.generateBtn.addEventListener('click', this.generateFinalJsonFiles.bind(this));
+                this.dom.manageGlossaryBtn.addEventListener('click', () => this.ui.showGlossaryModal(true));
+                this.dom.closeGlossaryModalBtn.addEventListener('click', () => this.ui.showGlossaryModal(false));
+                this.dom.addGlossaryTermBtn.addEventListener('click', this.glossary.add.bind(this));
+                this.dom.geminiKeyInput.addEventListener('change', this.session.save.bind(this));
+                this.dom.chatgptKeyInput.addEventListener('change', this.session.save.bind(this));
+            },
+            
+            events: {
+                onApiProviderChange(e) {
+                    const isGemini = e.target.value === 'gemini';
+                    this.dom.geminiKeyGroup.classList.toggle('hidden', !isGemini);
+                    this.dom.chatgptKeyGroup.classList.toggle('hidden', isGemini);
+                    this.session.save();
+                },
+                onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); },
+                onDragLeave(e) { e.currentTarget.classList.remove('dragover'); },
+                onFileDrop(e) { e.preventDefault(); this.dom.fileUpload.classList.remove('dragover'); this.fileHandler.addFiles(e.dataTransfer.files); },
+                onFileSelect(e) { this.fileHandler.addFiles(e.target.files); }
+            },
 
-            try {
-                // 1. Read files
-                progressText.textContent = 'جاري قراءة الملفات...';
-                originalJsonData = [];
-                for (const file of selectedFiles) {
-                    const content = await file.text();
-                    originalJsonData.push({ name: file.name, data: JSON.parse(content) });
-                }
-
-                // 2. Translate content
-                translatedJsonData = JSON.parse(JSON.stringify(originalJsonData)); // Deep copy
-                let totalTasks = originalJsonData.reduce((acc, file) => acc + countTranslationTasks(file.data), 0);
-                let completedTasks = 0;
-
-                const useGlossary = useGlossaryCheckbox.checked;
-
-                for (const file of translatedJsonData) {
-                    const tasks = [];
-                    if (file.data.statement) {
-                        tasks.push(
-                            translateText(file.data.statement, apiKey, apiProvider, useGlossary ? glossary : null).then(t => {
-                                file.data.statement = t;
-                                completedTasks++;
-                                progressText.textContent = `جاري الترجمة... (${Math.round((completedTasks/totalTasks)*100)}%)`;
-                            })
-                        );
+            // --- SESSION MANAGEMENT ---
+            session: {
+                save() {
+                    const sessionData = {
+                        apiKeys: {
+                            gemini: btoa(TranslatorApp.dom.geminiKeyInput.value), // Obfuscate key
+                            chatgpt: btoa(TranslatorApp.dom.chatgptKeyInput.value), // Obfuscate key
+                        },
+                        selectedProvider: document.querySelector('input[name="apiProvider"]:checked').value,
+                        selectedFilesInfo: TranslatorApp.state.selectedFilesInfo,
+                        originalJsonData: TranslatorApp.state.originalJsonData,
+                        translatedJsonData: TranslatorApp.state.translatedJsonData,
+                        glossary: TranslatorApp.state.glossary,
+                        activeScreen: TranslatorApp.state.activeScreen,
+                    };
+                    localStorage.setItem('translatorSession', JSON.stringify(sessionData));
+                },
+                load() {
+                    const savedSession = localStorage.getItem('translatorSession');
+                    if (!savedSession) return;
+                    const sessionData = JSON.parse(savedSession);
+                    try {
+                        TranslatorApp.dom.geminiKeyInput.value = sessionData.apiKeys?.gemini ? atob(sessionData.apiKeys.gemini) : '';
+                        TranslatorApp.dom.chatgptKeyInput.value = sessionData.apiKeys?.chatgpt ? atob(sessionData.apiKeys.chatgpt) : '';
+                    } catch (e) {
+                        console.error("Failed to decode API keys, clearing them.", e);
+                        TranslatorApp.dom.geminiKeyInput.value = '';
+                        TranslatorApp.dom.chatgptKeyInput.value = '';
                     }
-                    if (file.data.parts && Array.isArray(file.data.parts)) {
-                        for (const part of file.data.parts) {
-                            if (part.stem) {
-                                tasks.push(
-                                    translateText(part.stem, apiKey, apiProvider, useGlossary ? glossary : null).then(t => {
-                                        part.stem = t;
-                                        completedTasks++;
-                                        progressText.textContent = `جاري الترجمة... (${Math.round((completedTasks/totalTasks)*100)}%)`;
-                                    })
-                                );
-                            }
-                            if (part.answer) {
-                                tasks.push(
-                                    translateText(part.answer, apiKey, apiProvider, useGlossary ? glossary : null).then(t => {
-                                        part.answer = t;
-                                        completedTasks++;
-                                        progressText.textContent = `جاري الترجمة... (${Math.round((completedTasks/totalTasks)*100)}%)`;
-                                    })
-                                );
-                            }
-                            if(part.choices && Array.isArray(part.choices)){
-                                for(let i = 0; i < part.choices.length; i++){
-                                    if(part.choices[i].html_content){
-                                        tasks.push(
-                                            translateText(part.choices[i].html_content, apiKey, apiProvider, useGlossary ? glossary : null).then(t => {
-                                                part.choices[i].html_content = t;
-                                                completedTasks++;
-                                                progressText.textContent = `جاري الترجمة... (${Math.round((completedTasks/totalTasks)*100)}%)`;
-                                            })
-                                        );
-                                    }
-                                }
-                            }
+                    TranslatorApp.state.selectedFilesInfo = sessionData.selectedFilesInfo || [];
+                    TranslatorApp.state.originalJsonData = sessionData.originalJsonData || [];
+                    TranslatorApp.state.translatedJsonData = sessionData.translatedJsonData || [];
+                    TranslatorApp.state.glossary = sessionData.glossary || [];
+                    TranslatorApp.state.activeScreen = sessionData.activeScreen || 'setup';
+                    if (sessionData.selectedProvider) {
+                        document.querySelector(`input[name="apiProvider"][value="${sessionData.selectedProvider}"]`).checked = true;
+                        TranslatorApp.events.onApiProviderChange({ target: { value: sessionData.selectedProvider } });
+                    }
+                    TranslatorApp.ui.renderFileList();
+                    TranslatorApp.glossary.render();
+                    if (TranslatorApp.state.activeScreen === 'preview' && TranslatorApp.state.translatedJsonData.length > 0) {
+                        TranslatorApp.ui.renderPreview();
+                        TranslatorApp.ui.showScreen('preview');
+                    } else {
+                        TranslatorApp.ui.showScreen('setup');
+                    }
+                    TranslatorApp.ui.showAlert('تم استعادة الجلسة السابقة بنجاح.', 'success');
+                },
+                clear() {
+                    localStorage.removeItem('translatorSession');
+                    location.reload();
+                }
+            },
+
+            // --- FILE HANDLING ---
+            fileHandler: {
+                addFiles(files) {
+                    const fileList = Array.from(files).filter(f => f.name.endsWith('.json'));
+                    fileList.forEach(file => {
+                        if (!TranslatorApp.state.selectedFilesInfo.some(f => f.name === file.name)) {
+                            TranslatorApp.state.selectedFilesInfo.push({ name: file.name, size: file.size });
                         }
+                    });
+                    TranslatorApp.ui.renderFileList();
+                    TranslatorApp.session.save();
+                },
+                removeFile(index) {
+                    TranslatorApp.state.selectedFilesInfo.splice(index, 1);
+                    TranslatorApp.state.originalJsonData.splice(index, 1);
+                    TranslatorApp.state.translatedJsonData.splice(index, 1);
+                    TranslatorApp.ui.renderFileList();
+                    TranslatorApp.session.save();
+                },
+                async readFilesFromInput() {
+                    const fileInputFiles = TranslatorApp.dom.fileInput.files;
+                    if (fileInputFiles.length === 0 && TranslatorApp.state.originalJsonData.length === 0) {
+                         throw new Error("الرجاء تحديد الملفات مرة أخرى لبدء الترجمة.");
                     }
-                    await Promise.all(tasks);
+                    TranslatorApp.state.originalJsonData = [];
+                    for (const fileInfo of TranslatorApp.state.selectedFilesInfo) {
+                       const file = Array.from(fileInputFiles).find(f => f.name === fileInfo.name);
+                       if(file) {
+                           const content = await file.text();
+                           TranslatorApp.state.originalJsonData.push({ name: file.name, data: JSON.parse(content) });
+                       } else if (!TranslatorApp.state.originalJsonData.find(d => d.name === fileInfo.name)) {
+                           throw new Error(`لم يتم العثور على الملف ${fileInfo.name}. يرجى إعادة تحديده.`);
+                       }
+                    }
                 }
+            },
 
-                // 3. Render preview
-                progressText.textContent = 'اكتملت الترجمة! جاري عرض النتائج...';
-                renderPreview();
-                progressContainer.classList.add('hidden');
-                previewSection.classList.remove('hidden');
+            // --- GLOSSARY ---
+            glossary: {
+                add() {
+                    const term = TranslatorApp.dom.glossaryTermInput.value.trim();
+                    const translation = TranslatorApp.dom.glossaryTranslationInput.value.trim();
+                    if (!term || !translation) return TranslatorApp.ui.showAlert('يرجى إدخال المصطلح وترجمته.', 'error');
+                    if (TranslatorApp.state.glossary.some(e => e.term.toLowerCase() === term.toLowerCase())) return TranslatorApp.ui.showAlert('هذا المصطلح موجود بالفعل في القاموس.', 'error');
+                    TranslatorApp.state.glossary.push({ term, translation });
+                    TranslatorApp.dom.glossaryTermInput.value = '';
+                    TranslatorApp.dom.glossaryTranslationInput.value = '';
+                    this.render();
+                    TranslatorApp.session.save();
+                },
+                delete(index) {
+                    TranslatorApp.state.glossary.splice(index, 1);
+                    this.render();
+                    TranslatorApp.session.save();
+                },
+                render() { TranslatorApp.ui.renderGlossaryList(); },
+                apply(text) {
+                    const { glossary } = TranslatorApp.state;
+                    if (!text || !glossary || glossary.length === 0) return { modifiedText: text, placeholders: {} };
+                    let modifiedText = text;
+                    const placeholders = {};
+                    let placeholderIndex = 0;
+                    const sortedGlossary = [...glossary].sort((a, b) => b.term.length - a.term.length);
+                    sortedGlossary.forEach(entry => {
+                        const regex = new RegExp(`\\b${entry.term}\\b`, 'gi');
+                        modifiedText = modifiedText.replace(regex, () => {
+                            const placeholder = `__GLOSSARY_${placeholderIndex}__`;
+                            placeholders[placeholder] = entry.translation;
+                            placeholderIndex++;
+                            return placeholder;
+                        });
+                    });
+                    return { modifiedText, placeholders };
+                },
+                revert(text, placeholders) {
+                    if (Object.keys(placeholders).length === 0) return text;
+                    return Object.entries(placeholders).reduce((acc, [key, value]) => acc.replaceAll(key, value), text);
+                }
+            },
 
-            } catch (error) {
-                console.error('Translation process failed:', error);
-                showAlert(`حدث خطأ: ${error.message}`);
-                // Revert UI
-                setupSection.classList.remove('hidden');
-                progressContainer.classList.add('hidden');
-            } finally {
-                translateBtn.disabled = false;
-            }
-        }
-        
-        function countTranslationTasks(data) {
-            let count = 0;
-            if (data.statement) count++;
-            if (data.parts && Array.isArray(data.parts)) {
-                data.parts.forEach(part => {
-                    if (part.stem) count++;
-                    if (part.answer) count++;
-                    if (part.choices && Array.isArray(part.choices)) {
-                        part.choices.forEach(choice => {
-                            if (choice.html_content) count++;
+            // --- API & TRANSLATION ---
+            api: {
+                async translateBatch(texts, apiKey, provider) {
+                    const BATCH_SEPARATOR = "\n|||---|||\n";
+                    const prompt = `Translate each of the following texts to Arabic, separated by "${BATCH_SEPARATOR}". Keep any HTML tags, LaTeX equations, or placeholders like __GLOSSARY_0__ unchanged. Maintain the exact number of separated texts in your response.\n\n${texts.join(BATCH_SEPARATOR)}`;
+                    
+                    let responseText;
+                    if (provider === 'gemini') {
+                        responseText = await this.withGemini(prompt, apiKey);
+                    } else {
+                        responseText = await this.withChatGPT(prompt, apiKey);
+                    }
+                    
+                    const translatedTexts = responseText.split(BATCH_SEPARATOR.trim()); // trim to handle potential whitespace issues
+                    if (translatedTexts.length !== texts.length) {
+                        console.error("Mismatch in translated texts count.", { sent: texts.length, received: translatedTexts.length });
+                        throw new Error("حدث خطأ أثناء معالجة الترجمة المجمعة، عدد النصوص المترجمة لا يتطابق.");
+                    }
+                    return translatedTexts.map(t => t.trim());
+                },
+                async withGemini(prompt, apiKey) {
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                    const response = await fetch(apiUrl, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    if (!response.ok) { const err = await response.json(); throw new Error(`Gemini API Error: ${err.error?.message || response.statusText}`); }
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                },
+                async withChatGPT(prompt, apiKey) {
+                    const apiUrl = 'https://api.openai.com/v1/chat/completions';
+                    const response = await fetch(apiUrl, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                        body: JSON.stringify({
+                            model: 'gpt-4o',
+                            messages: [
+                                { role: 'system', content: 'You are a professional translator. You will receive a batch of texts separated by a unique delimiter. Translate each text to Modern Standard Arabic and return them separated by the same delimiter. Do not alter the number of texts.' },
+                                { role: 'user', content: prompt }
+                            ],
+                            temperature: 0.3
+                        })
+                    });
+                    if (!response.ok) { const err = await response.json(); throw new Error(`ChatGPT API Error: ${err.error?.message || response.statusText}`); }
+                    const data = await response.json();
+                    return data.choices?.[0]?.message?.content || '';
+                }
+            },
+
+            // --- MAIN PROCESS ---
+            async startTranslationProcess() {
+                const apiProvider = document.querySelector('input[name="apiProvider"]:checked').value;
+                const apiKey = (apiProvider === 'gemini' ? this.dom.geminiKeyInput.value : this.dom.chatgptKeyInput.value).trim();
+                if (!apiKey) return this.ui.showAlert(`الرجاء إدخال مفتاح API لـ ${apiProvider === 'gemini' ? 'Gemini' : 'ChatGPT'}.`);
+                if (this.state.selectedFilesInfo.length === 0) return this.ui.showAlert('الرجاء اختيار ملف JSON واحد على الأقل.');
+
+                this.ui.showScreen('progress');
+                this.dom.translateBtn.disabled = true;
+                this.state.translationCache.clear(); // Clear cache for new batch
+
+                try {
+                    this.ui.updateProgress('جاري قراءة الملفات...');
+                    await this.fileHandler.readFilesFromInput();
+                    this.state.translatedJsonData = JSON.parse(JSON.stringify(this.state.originalJsonData));
+
+                    this.ui.updateProgress('جاري تجميع النصوص للترجمة...');
+                    const textsToTranslate = [];
+                    const textPointers = [];
+                    const useGlossary = this.dom.useGlossaryCheckbox.checked;
+
+                    this.state.translatedJsonData.forEach((file, fileIndex) => {
+                        const processText = (text, pointer) => {
+                            if (!text || !text.trim()) return;
+                            const { modifiedText, placeholders } = useGlossary ? this.glossary.apply(text) : { modifiedText: text, placeholders: {} };
+                            pointer.placeholders = placeholders;
+                            
+                            if (this.state.translationCache.has(modifiedText)) {
+                                pointer.cached = true;
+                                pointer.text = this.state.translationCache.get(modifiedText);
+                            } else {
+                                textsToTranslate.push(modifiedText);
+                                textPointers.push(pointer);
+                            }
+                        };
+                        
+                        const addPointer = (key, partIndex = null, choiceIndex = null) => ({ fileIndex, key, partIndex, choiceIndex });
+                        
+                        processText(file.data.statement, addPointer('statement'));
+                        file.data.parts?.forEach((part, partIndex) => {
+                            processText(part.stem, addPointer('stem', partIndex));
+                            processText(part.answer, addPointer('answer', partIndex));
+                            part.choices?.forEach((choice, choiceIndex) => processText(choice.html_content, addPointer('choice', partIndex, choiceIndex)));
+                        });
+                    });
+
+                    this.ui.updateProgress(`جاري ترجمة ${textsToTranslate.length} نص فريد...`);
+                    if (textsToTranslate.length > 0) {
+                        const translatedTexts = await this.api.translateBatch(textsToTranslate, apiKey, apiProvider);
+                        translatedTexts.forEach((translatedText, i) => {
+                            const originalText = textsToTranslate[i];
+                            this.state.translationCache.set(originalText, translatedText);
+                            textPointers[i].text = translatedText;
                         });
                     }
-                });
-            }
-            return count;
-        }
 
-        async function translateText(text, apiKey, provider, currentGlossary) {
-            if (!text || !text.trim()) return text;
-            
-            const { modifiedText, placeholders } = applyGlossary(text, currentGlossary);
+                    this.ui.updateProgress('جاري تحديث البيانات...');
+                    [...textPointers, ...this.state.translatedJsonData.flatMap((f, fi) => this.findCachedPointers(fi))].forEach(pointer => {
+                        this.updateDataPointer(pointer);
+                    });
 
-            let translatedText;
-            if (provider === 'gemini') {
-                translatedText = await translateWithGemini(modifiedText, apiKey);
-            } else {
-                translatedText = await translateWithChatGPT(modifiedText, apiKey);
-            }
-            
-            return revertPlaceholders(translatedText, placeholders);
-        }
+                    this.state.activeScreen = 'preview';
+                    this.session.save();
+                    this.ui.renderPreview();
+                    this.ui.showScreen('preview');
+                    this.ui.showAlert('تمت الترجمة بنجاح!', 'success');
 
-        async function translateWithGemini(text, apiKey) {
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-            
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: `Translate the following text to Arabic. Keep any HTML tags, LaTeX equations, or placeholders like __GLOSSARY_0__ unchanged:\n\n${text}` }] }]
-                    })
-                });
-                if (!response.ok) {
-                    const errorBody = await response.json();
-                    throw new Error(`Gemini API Error: ${errorBody.error?.message || response.statusText}`);
+                } catch (error) {
+                    console.error('Translation process failed:', error);
+                    this.ui.showAlert(error.message, 'error');
+                    this.ui.showScreen('setup');
+                } finally {
+                    this.dom.translateBtn.disabled = false;
                 }
-                const data = await response.json();
-                const translated = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                return translated ? translated.trim() : text;
-            } catch (error) {
-                console.error("Gemini API call failed:", error);
-                throw error;
-            }
-        }
+            },
+            
+            findCachedPointers(fileIndex) {
+                 const pointers = [];
+                 const file = this.state.translatedJsonData[fileIndex];
+                 const useGlossary = this.dom.useGlossaryCheckbox.checked;
+                 
+                 const checkCache = (text, pointer) => {
+                     if (!text) return;
+                     const { modifiedText, placeholders } = useGlossary ? this.glossary.apply(text) : { modifiedText: text, placeholders: {} };
+                     if (this.state.translationCache.has(modifiedText)) {
+                         pointer.text = this.state.translationCache.get(modifiedText);
+                         pointer.placeholders = placeholders;
+                         pointers.push(pointer);
+                     }
+                 };
+                 
+                 checkCache(file.data.statement, {fileIndex, key: 'statement'});
+                 file.data.parts?.forEach((part, partIndex) => {
+                     checkCache(part.stem, {fileIndex, key: 'stem', partIndex});
+                     checkCache(part.answer, {fileIndex, key: 'answer', partIndex});
+                     part.choices?.forEach((choice, choiceIndex) => checkCache(choice.html_content, {fileIndex, key: 'choice', partIndex, choiceIndex}));
+                 });
+                 
+                 return pointers;
+            },
 
-        async function translateWithChatGPT(text, apiKey) {
-            const apiUrl = 'https://api.openai.com/v1/chat/completions';
+            updateDataPointer(pointer) {
+                const { fileIndex, key, partIndex, choiceIndex, text, placeholders } = pointer;
+                const final_text = this.glossary.revert(text, placeholders);
+                const fileData = this.state.translatedJsonData[fileIndex].data;
 
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
-                    },
-                    body: JSON.stringify({
-                        model: 'gpt-4o', // Using a modern model
-                        messages: [
-                            {
-                                role: 'system',
-                                content: 'You are a professional translator. Translate the following text to Modern Standard Arabic. Keep any HTML tags, LaTeX equations, or placeholders like __GLOSSARY_0__ unchanged.'
-                            },
-                            {
-                                role: 'user',
-                                content: text
+                if (key === 'statement') fileData.statement = final_text;
+                else if (key === 'parts' && partIndex !== null) {
+                    const part = fileData.parts[partIndex];
+                    if (subKey === 'stem') part.stem = final_text;
+                    if (subKey === 'answer') part.answer = final_text;
+                    if (subKey === 'choice' && choiceIndex !== null) part.choices[choiceIndex].html_content = final_text;
+                }
+            },
+
+            // --- UI & RENDER ---
+            ui: {
+                showScreen(screenName) { TranslatorApp.state.activeScreen = screenName; ['setupSection', 'progressContainer', 'previewSection'].forEach(id => TranslatorApp.dom[id].classList.add('hidden')); TranslatorApp.dom[screenName].classList.remove('hidden'); },
+                updateProgress(text) { TranslatorApp.dom.progressText.textContent = text; },
+                showAlert(message, type = 'error', duration = 5000) {
+                    const colors = { error: 'bg-red-500', success: 'bg-green-500', info: 'bg-blue-500' };
+                    const alertBox = document.createElement('div');
+                    alertBox.className = `alert flex justify-between items-center text-white p-4 rounded-lg shadow-xl ${colors[type] || 'bg-gray-500'}`;
+                    alertBox.innerHTML = `<span>${message}</span><button class="mr-2 text-xl font-bold">&times;</button>`;
+                    alertBox.querySelector('button').onclick = () => alertBox.remove();
+                    TranslatorApp.dom.alertContainer.appendChild(alertBox);
+                    if (duration) { setTimeout(() => { alertBox.classList.add('fade-out'); alertBox.addEventListener('transitionend', () => alertBox.remove()); }, duration); }
+                },
+                renderFileList() {
+                    const { fileList } = TranslatorApp.dom;
+                    fileList.innerHTML = '';
+                    if (TranslatorApp.state.selectedFilesInfo.length === 0) return;
+                    const listContainer = document.createElement('ul');
+                    listContainer.className = 'my-4 space-y-2';
+                    TranslatorApp.state.selectedFilesInfo.forEach((fileInfo, index) => {
+                        const li = document.createElement('li');
+                        li.className = 'flex justify-between items-center bg-gray-100 p-2 rounded-lg';
+                        li.innerHTML = `<span class="font-medium text-gray-800">${fileInfo.name}</span><button data-index="${index}" class="remove-file-btn text-red-500 hover:text-red-700 font-bold text-xl">&times;</button>`;
+                        listContainer.appendChild(li);
+                    });
+                    fileList.appendChild(listContainer);
+                    fileList.querySelectorAll('.remove-file-btn').forEach(btn => { btn.onclick = () => TranslatorApp.fileHandler.removeFile(parseInt(btn.dataset.index)); });
+                },
+                showGlossaryModal(show) { TranslatorApp.dom.glossaryModal.classList.toggle('hidden', !show); },
+                renderGlossaryList() {
+                    const { glossaryListContainer } = TranslatorApp.dom;
+                    glossaryListContainer.innerHTML = '';
+                    if (TranslatorApp.state.glossary.length === 0) return glossaryListContainer.innerHTML = '<p class="text-center text-gray-500">القاموس فارغ حاليًا.</p>';
+                    const list = document.createElement('ul');
+                    list.className = 'space-y-2';
+                    TranslatorApp.state.glossary.forEach((entry, index) => {
+                        const li = document.createElement('li');
+                        li.className = 'flex justify-between items-center p-2 bg-white rounded-md border';
+                        li.innerHTML = `<div><span class="font-semibold">${entry.term}</span><span class="text-gray-500 mx-2">→</span><span>${entry.translation}</span></div><button data-index="${index}" class="remove-glossary-btn text-red-500 hover:text-red-700 font-bold">&times;</button>`;
+                        list.appendChild(li);
+                    });
+                    glossaryListContainer.appendChild(list);
+                    glossaryListContainer.querySelectorAll('.remove-glossary-btn').forEach(btn => { btn.onclick = () => TranslatorApp.glossary.delete(parseInt(btn.dataset.index)); });
+                },
+                renderPreview() {
+                    const { previewContainer } = TranslatorApp.dom;
+                    previewContainer.innerHTML = '';
+                    TranslatorApp.state.translatedJsonData.forEach((file, fileIndex) => {
+                        const card = document.createElement('div');
+                        card.className = 'preview-card bg-gray-50 p-4 rounded-lg border';
+                        card.dir = 'rtl';
+                        const createEditableField = (label, value, onUpdate) => {
+                            if (value === undefined) return '';
+                            return `<div class="mb-3"><p class="font-semibold text-right">${label}:</p><div contenteditable="true" onblur="${onUpdate}" class="editable-content mt-1 p-2 bg-white rounded border border-gray-200 text-right">${value}</div></div>`;
+                        };
+                        let content = `<h3 class="text-xl font-bold text-gray-800 mb-4 text-right">📄 ${file.name}</h3>`;
+                        content += createEditableField('البيان (Statement)', file.data.statement, `TranslatorApp.updateData(${fileIndex}, 'statement', null, this.innerHTML)`);
+                        file.data.parts?.forEach((part, partIndex) => {
+                            content += `<div class="border-t pt-4 mt-4"><h5 class="font-semibold text-md text-gray-700 mb-2 text-right">الجزء ${partIndex + 1}</h5>`;
+                            content += createEditableField('السؤال (Stem)', part.stem, `TranslatorApp.updateData(${fileIndex}, 'parts', ${partIndex}, this.innerHTML, 'stem')`);
+                            content += createEditableField('الإجابة (Answer)', part.answer, `TranslatorApp.updateData(${fileIndex}, 'parts', ${partIndex}, this.innerHTML, 'answer')`);
+                            if (part.choices) {
+                                content += `<div class="mb-3"><p class="font-semibold text-right">الخيارات (Choices):</p><ul class="list-disc list-inside mt-2 space-y-2 mr-4">`;
+                                part.choices.forEach((choice, choiceIndex) => {
+                                    content += `<li class="text-right"><div contenteditable="true" onblur="TranslatorApp.updateData(${fileIndex}, 'parts', ${partIndex}, this.innerHTML, 'choice', ${choiceIndex})" class="editable-content inline-block w-11/12 p-1 bg-white rounded border border-gray-200">${choice.html_content}</div></li>`;
+                                });
+                                content += `</ul></div>`;
                             }
-                        ],
-                        temperature: 0.3
-                    })
+                            content += `</div>`;
+                        });
+                        card.innerHTML = content;
+                        previewContainer.appendChild(card);
+                    });
+                }
+            },
+
+            // --- HELPERS ---
+            updateData(fileIndex, key, partIndex, value, subKey = null, choiceIndex = null) {
+                const fileData = this.state.translatedJsonData[fileIndex].data;
+                if (key === 'statement') fileData.statement = value;
+                else if (key === 'parts') {
+                    const part = fileData.parts[partIndex];
+                    if (subKey === 'stem') part.stem = value;
+                    if (subKey === 'answer') part.answer = value;
+                    if (subKey === 'choice') part.choices[choiceIndex].html_content = value;
+                }
+                this.session.save();
+            },
+            async generateFinalJsonFiles() {
+                const zip = new JSZip();
+                this.state.translatedJsonData.forEach(file => {
+                    const originalFile = this.state.originalJsonData.find(f => f.name === file.name);
+                    const finalData = JSON.parse(JSON.stringify(originalFile.data));
+                    if (finalData.statement !== undefined) finalData.statement = file.data.statement;
+                    if (finalData.parts) {
+                        finalData.parts.forEach((part, partIndex) => {
+                            const translatedPart = file.data.parts[partIndex];
+                            if (part.stem !== undefined) part.stem = translatedPart.stem;
+                            if (part.answer !== undefined) part.answer = translatedPart.answer;
+                            if (part.choices) {
+                                part.choices.forEach((choice, choiceIndex) => {
+                                    if (choice.html_content !== undefined) choice.html_content = translatedPart.choices[choiceIndex].html_content;
+                                });
+                            }
+                        });
+                    }
+                    zip.file(file.name, JSON.stringify(finalData, null, 2));
                 });
-                 if (!response.ok) {
-                    const errorBody = await response.json();
-                    throw new Error(`ChatGPT API Error: ${errorBody.error?.message || response.statusText}`);
+                try {
+                    const content = await zip.generateAsync({ type: "blob" });
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(content);
+                    link.download = "translated_questions.zip";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    this.ui.showAlert('تم إنشاء ملف ZIP بنجاح!', 'success');
+                } catch (error) {
+                    console.error("Failed to generate zip file:", error);
+                    this.ui.showAlert('فشل إنشاء ملف ZIP.', 'error');
                 }
-                const data = await response.json();
-                const translated = data.choices?.[0]?.message?.content;
-                return translated ? translated.trim() : text;
-            } catch (error) {
-                console.error("ChatGPT API call failed:", error);
-                throw error;
             }
-        }
+        };
 
-        function renderPreview() {
-            previewContainer.innerHTML = '';
-            translatedJsonData.forEach((file, fileIndex) => {
-                const card = document.createElement('div');
-                card.className = 'preview-card bg-gray-50 p-4 rounded-lg border';
-                card.dir = 'rtl'; // Set direction for the entire card
-                
-                let content = `<h3 class="text-xl font-bold text-gray-800 mb-4 text-right">📄 ${file.name}</h3>`;
-                
-                if (file.data.statement) {
-                    content += `
-                        <div class="mb-4">
-                            <h4 class="font-semibold text-indigo-700 text-right">البيان (Statement)</h4>
-                            <div contenteditable="true" oninput="updateData(${fileIndex}, 'statement', null, this.innerHTML)" class="editable-content mt-1 p-2 bg-white rounded border border-gray-200 text-right">${file.data.statement}</div>
-                        </div>`;
-                }
-
-                if (file.data.parts && Array.isArray(file.data.parts)) {
-                    file.data.parts.forEach((part, partIndex) => {
-                        content += `<div class="border-t pt-4 mt-4">`;
-                        content += `<h5 class="font-semibold text-md text-gray-700 mb-2 text-right">الجزء ${partIndex + 1}</h5>`;
-                        if (part.stem) {
-                             content += `
-                                <div class="mb-3">
-                                    <p class="font-semibold text-right">السؤال (Stem):</p>
-                                    <div contenteditable="true" oninput="updateData(${fileIndex}, 'parts', ${partIndex}, this.innerHTML, 'stem')" class="editable-content mt-1 p-2 bg-white rounded border border-gray-200 text-right">${part.stem}</div>
-                                </div>`;
-                        }
-                        if (part.answer) {
-                             content += `
-                                <div class="mb-3">
-                                    <p class="font-semibold text-right">الإجابة (Answer):</p>
-                                    <div contenteditable="true" oninput="updateData(${fileIndex}, 'parts', ${partIndex}, this.innerHTML, 'answer')" class="editable-content mt-1 p-2 bg-white rounded border border-gray-200 text-right">${part.answer}</div>
-                                </div>`;
-                        }
-                        if (part.choices && Array.isArray(part.choices)) {
-                            content += `<div class="mb-3"><p class="font-semibold text-right">الخيارات (Choices):</p><ul class="list-disc list-inside mt-2 space-y-2 mr-4">`;
-                            part.choices.forEach((choice, choiceIndex) => {
-                                content += `<li class="text-right"><div contenteditable="true" oninput="updateData(${fileIndex}, 'parts', ${partIndex}, this.innerHTML, 'choice', ${choiceIndex})" class="editable-content inline-block w-11/12 p-1 bg-white rounded border border-gray-200">${choice.html_content}</div></li>`;
-                            });
-                            content += `</ul></div>`;
-                        }
-                        content += `</div>`;
-                    });
-                }
-                card.innerHTML = content;
-                previewContainer.appendChild(card);
-            });
-        }
-
-        function updateData(fileIndex, key, partIndex, value, subKey = null, choiceIndex = null) {
-            // When using contenteditable with innerHTML, browsers might add their own styling.
-            // This is a simple update. For complex scenarios, a library or more robust handling would be needed.
-            if (key === 'statement') {
-                translatedJsonData[fileIndex].data.statement = value;
-            } else if (key === 'parts') {
-                const part = translatedJsonData[fileIndex].data.parts[partIndex];
-                if (subKey === 'stem') part.stem = value;
-                if (subKey === 'answer') part.answer = value;
-                if (subKey === 'choice') part.choices[choiceIndex].html_content = value;
-            }
-        }
-
-        async function generateFinalJsonFiles() {
-            const zip = new JSZip();
-            
-            translatedJsonData.forEach(file => {
-                // Reconstruct the original structure before stringifying
-                const finalData = JSON.parse(JSON.stringify(originalJsonData.find(f => f.name === file.name).data));
-
-                // Update the finalData object with the translated (and possibly edited) text
-                if (finalData.statement && file.data.statement) {
-                    finalData.statement = file.data.statement;
-                }
-                if (finalData.parts && Array.isArray(finalData.parts)) {
-                    finalData.parts.forEach((part, partIndex) => {
-                        const translatedPart = file.data.parts[partIndex];
-                        if (part.stem && translatedPart.stem) {
-                            part.stem = translatedPart.stem;
-                        }
-                        if (part.answer && translatedPart.answer) {
-                            part.answer = translatedPart.answer;
-                        }
-                        if (part.choices && Array.isArray(part.choices)) {
-                            part.choices.forEach((choice, choiceIndex) => {
-                                if (choice.html_content && translatedPart.choices[choiceIndex]) {
-                                    choice.html_content = translatedPart.choices[choiceIndex].html_content;
-                                }
-                            });
-                        }
-                    });
-                }
-                
-                zip.file(file.name, JSON.stringify(finalData, null, 2));
-            });
-
-            try {
-                const content = await zip.generateAsync({ type: "blob" });
-                const link = document.createElement("a");
-                link.href = URL.createObjectURL(content);
-                link.download = "translated_questions.zip";
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                showAlert('تم إنشاء ملف ZIP بنجاح!', 'success');
-            } catch (error) {
-                console.error("Failed to generate zip file:", error);
-                showAlert('فشل إنشاء ملف ZIP.');
-            }
-        }
+        document.addEventListener('DOMContentLoaded', () => TranslatorApp.init());
     </script>
 </body>
 </html>
