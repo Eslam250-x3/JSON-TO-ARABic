@@ -351,8 +351,12 @@
                 <button id="closeSubjectsModalBtn" class="text-2xl hover:opacity-75">&times;</button>
             </div>
             <p class="text-sm mt-1 mb-4" style="color: var(--secondary-text);">
-                اختر المادة والصف لتطبيق تعليمات ترجمة مخصصة.
+                اختر المادة والصف لتطبيق تعليمات ترجمة مخصصة. يمكنك أيضاً تحميل المصطلحات الخاصة بالمادة من ملف Google Sheet.
             </p>
+            <div class="mb-4">
+                <label for="termbaseUrl" class="block text-sm font-medium mb-1">رابط Google Sheet CSV للمصطلحات:</label>
+                <input type="text" id="termbaseUrl" placeholder="ألصق هنا رابط CSV المنشور من Google Sheet" class="w-full p-2 border rounded-lg">
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <select id="subjectSelect" class="p-2 border rounded-lg w-full"></select>
                 <select id="gradeSelect" class="p-2 border rounded-lg w-full"></select>
@@ -422,7 +426,8 @@
                     mappedIdsCount: 'mappedIdsCount', fetchMappedIdsBtn: 'fetchMappedIdsBtn',
                     manageSubjectsBtn: 'manageSubjectsBtn', subjectsModal: 'subjectsModal',
                     closeSubjectsModalBtn: 'closeSubjectsModalBtn', subjectSelect: 'subjectSelect',
-                    gradeSelect: 'gradeSelect', promptPreview: 'promptPreview', applyPromptBtn: 'applyPromptBtn'
+                    gradeSelect: 'gradeSelect', promptPreview: 'promptPreview', applyPromptBtn: 'applyPromptBtn',
+                    termbaseUrl: 'termbaseUrl'
                 };
                 for (const key in elementMap) { this.dom[key] = document.getElementById(elementMap[key]); }
                 this.dom.apiProviderRadios = document.querySelectorAll('input[name="apiProvider"]');
@@ -589,7 +594,8 @@
                         mappedIds: TranslatorApp.dom.mappedIdsInput.value,
                         useMappedIds: TranslatorApp.dom.useMappedIdsCheckbox.checked,
                         selectedSubject: TranslatorApp.state.selectedSubject,
-                        selectedGrade: TranslatorApp.state.selectedGrade
+                        selectedGrade: TranslatorApp.state.selectedGrade,
+                        termbaseUrl: TranslatorApp.dom.termbaseUrl.value
                     };
                     localStorage.setItem('translatorSession', JSON.stringify(sessionData));
                     TranslatorApp.state.hasUnsavedChanges = false;
@@ -613,6 +619,7 @@
                     TranslatorApp.dom.useMappedIdsCheckbox.checked = sessionData.useMappedIds || false;
                     TranslatorApp.state.selectedSubject = sessionData.selectedSubject || 'None';
                     TranslatorApp.state.selectedGrade = sessionData.selectedGrade || 'None';
+                    TranslatorApp.dom.termbaseUrl.value = sessionData.termbaseUrl || '';
                     
                     if (sessionData.selectedProvider) {
                         document.querySelector(`input[name="apiProvider"][value="${sessionData.selectedProvider}"]`).checked = true;
@@ -848,7 +855,7 @@
                     return Object.entries(placeholders).reduce((acc, [key, value]) => acc.replaceAll(key, value), text);
                 }
             },
-
+            
             // --- SUBJECTS & PROMPTS ---
             subjects: {
                 data: {
