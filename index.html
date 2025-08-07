@@ -354,8 +354,8 @@
                 اختر المادة والصف لتطبيق تعليمات ترجمة مخصصة. يمكنك أيضاً تحميل المصطلحات الخاصة بالمادة من ملف Google Sheet.
             </p>
             <div class="mb-4">
-                <label for="termbaseUrl" class="block text-sm font-medium mb-1">رابط Google Sheet CSV للمصطلحات:</label>
-                <input type="text" id="termbaseUrl" placeholder="ألصق هنا رابط CSV المنشور من Google Sheet" class="w-full p-2 border rounded-lg">
+                <label for="termbaseUrl" class="block text-sm font-medium mb-1">رابط تطبيق الويب (Apps Script) للمصطلحات:</label>
+                <input type="text" id="termbaseUrl" placeholder="ألصق هنا رابط تطبيق الويب" class="w-full p-2 border rounded-lg">
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <select id="subjectSelect" class="p-2 border rounded-lg w-full"></select>
@@ -364,7 +364,7 @@
             <h4 class="text-lg font-semibold mb-2">معاينة التعليمات (البرومبت)</h4>
             <textarea id="promptPreview" rows="8" class="w-full p-2 rounded-lg mb-4" readonly></textarea>
             <button id="applyPromptBtn" class="w-full text-white font-bold py-2 px-4 rounded-lg" style="background-color: var(--success-color);">
-                تطبيق وحفظ
+                تطبيق وحفظ (سيتم تحميل القاموس الخاص بالمادة)
             </button>
         </div>
     </div>
@@ -461,7 +461,7 @@
                 // Glossary Events
                 this.dom.manageGlossaryBtn.addEventListener('click', () => this.ui.showGlossaryModal(true));
                 this.dom.closeGlossaryModalBtn.addEventListener('click', () => this.ui.showGlossaryModal(false));
-                this.dom.addGlossaryTermBtn.addEventListener('click', this.glossary.add.bind(this.glossary));
+                this.dom.addGlossaryTermBtn.addEventListener('click', this.glossary.add.bind(this));
                 this.dom.exportGlossaryBtn.addEventListener('click', this.glossary.export.bind(this.glossary));
                 this.dom.importGlossaryBtn.addEventListener('click', () => this.dom.glossaryFileInput.click());
                 this.dom.glossaryFileInput.addEventListener('change', (e) => this.glossary.import(e.target.files[0]));
@@ -619,7 +619,7 @@
                     TranslatorApp.dom.useMappedIdsCheckbox.checked = sessionData.useMappedIds || false;
                     TranslatorApp.state.selectedSubject = sessionData.selectedSubject || 'None';
                     TranslatorApp.state.selectedGrade = sessionData.selectedGrade || 'None';
-                    TranslatorApp.dom.termbaseUrl.value = sessionData.termbaseUrl || '';
+                    TranslatorApp.dom.termbaseUrl.value = sessionData.termbaseUrl || 'https://script.google.com/macros/s/AKfycbzUGuESM-IhkKIG7aupf91Ia8cZSTqqt2Tj9QukUq9FAYvNOyyjYegJcv-wUp7DTFI/exec';
                     
                     if (sessionData.selectedProvider) {
                         document.querySelector(`input[name="apiProvider"][value="${sessionData.selectedProvider}"]`).checked = true;
