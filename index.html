@@ -576,72 +576,105 @@
             }
         },
 
-        remoteGlossary: {
-            map: {}, // { term: approvedTranslation }
-            async fetchApproved(subject, texts) {
-                if (!subject || subject === 'None' || !Array.isArray(texts) || texts.length === 0) {
-                    this.map = {};
-                    return this.map;
-                }
-                try {
-                    const res = await fetch(APPS_SCRIPT_EXEC_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // لتفادي preflight
-                        body: JSON.stringify({
-                            sheetId: GOOGLE_SHEET_ID,
-                            subject,
-                            texts
-                        })
-                    });
-                    const json = await res.json();
-                    if (!res.ok || json.success === false) {
-                        throw new Error(json.error || `${res.status} ${res.statusText}`);
-                    }
-                    this.map = json.translations || {};
-                    return this.map;
-                } catch (e) {
-                    console.warn('Remote glossary fetch failed:', e);
-                    TranslatorApp.ui.showAlert('تعذّر جلب المصطلحات المعتمدة (سيُستكمل بدونها).', 'info', 4000);
-                    this.map = {};
-                    return this.map; // نكمل بدون enforced terms
-                }
-            },
-            applyWithPlaceholders(text) {
-                if (!text || !this.map || Object.keys(this.map).length === 0) {
-                    return { modifiedText: text, placeholders: {} };
-                }
-                let modifiedText = text;
-                const placeholders = {};
-                let i = 0;
+      remoteGlossary: {
+  map: {},
 
-                // ترتيب حسب الأطول لتجنب التداخل
-                const terms = Object.keys(this.map)
-                    .filter(t => t && t.trim())
-                    .sort((a, b) => b.length - a.length);
+  // يسحب مصطلحات المادة من الشيت (gviz) ويصفيها حسب النصوص الظاهرة
+  async fetchApproved(subject, texts) {
+    this.map = {};
+    if (!subject || subject === 'None') return this.map;
 
-                for (const term of terms) {
-                    const translation = this.map[term];
-                    if (!translation) continue;
-                    const esc = TranslatorApp.utils.escapeRegex(term.trim());
-                    const re = new RegExp(`\\b${esc}\\b`, 'gi');
+    try {
+      // 1) جهّز استعلام gviz: select A,B حيث C = Subject
+      const tq = `select A,B where C = '${(subject || '').replace(/'/g, "\\'")}'`;
+      const url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=termbase&tqx=out:json&headers=1&tq=${encodeURIComponent(tq)}`;
 
-                    if (re.test(modifiedText)) {
-                        const ph = `__GLOSSARY_${i++}__`;
-                        placeholders[ph] = translation;
-                        modifiedText = modifiedText.replace(re, ph);
-                    }
-                }
-                return { modifiedText, placeholders };
-            },
-            revertPlaceholders(text, placeholders) {
-                if (!placeholders || !text) return text;
-                let out = text;
-                for (const [ph, tr] of Object.entries(placeholders)) {
-                    out = out.split(ph).join(tr);
-                }
-                return out;
-            }
-        },
+      // 2) اطلب البيانات كـ نص (gviz بيرجع JSON ملفوف داخل setResponse)
+      const res = await fetch(url, { cache: 'no-cache' });
+      const raw = await res.text();
+
+      // 3) فك اللفّة وحوّل لـ JSON
+      const match = raw.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\);/);
+      if (!match) throw new Error('تعذّر قراءة استجابة gviz (setResponse غير موجود).');
+      const data = JSON.parse(match[1]);
+
+      const rows = data.table?.rows || [];
+      const allPairs = rows
+        .map(r => ({
+          term: (r.c?.[0]?.v || '').toString().trim(),
+          translation: (r.c?.[1]?.v || '').toString().trim()
+        }))
+        .filter(x => x.term && x.translation);
+
+      // 4) لو فيه نصوص، صفي المصطلحات اللي فعلاً ظهرت فيها
+      const loweredTexts = Array.isArray(texts)
+        ? texts.map(t => (t || '').toString().toLowerCase())
+        : [];
+
+      const map = {};
+      if (loweredTexts.length > 0) {
+        allPairs.forEach(({ term, translation }) => {
+          const tl = term.toLowerCase();
+          if (loweredTexts.some(tx => tx.includes(tl))) {
+            map[term] = translation;
+          }
+        });
+      } else {
+        // مفيش نصوص؟ رجّع كل مصطلحات المادة (احتياطي)
+        allPairs.forEach(({ term, translation }) => { map[term] = translation; });
+      }
+
+      this.map = map;
+      return this.map;
+    } catch (e) {
+      console.warn('GVIZ fetch failed:', e);
+      TranslatorApp.ui.showAlert('تعذّر جلب المصطلحات المعتمدة (سيتم الاستمرار بدونها).', 'info', 4000);
+      this.map = {};
+      return this.map;
+    }
+  },
+
+  // حقن placeholders قبل الترجمة
+  applyWithPlaceholders(text) {
+    if (!text || !this.map || Object.keys(this.map).length === 0) {
+      return { modifiedText: text, placeholders: {} };
+    }
+    let modifiedText = text;
+    const placeholders = {};
+    let i = 0;
+
+    // رتّب بالأطول لتجنب التداخل
+    const terms = Object.keys(this.map).filter(Boolean).sort((a, b) => b.length - a.length);
+
+    for (const term of terms) {
+      const translation = this.map[term];
+      if (!translation) continue;
+
+      const esc = TranslatorApp.utils.escapeRegex(term.trim());
+      // لو المصطلح إنجليزي/أرقام: استخدم حدود كلمات. غير كده استخدم مطابقة مباشرة.
+      const useWordBoundary = /^[A-Za-z0-9 _-]+$/.test(term);
+      const re = new RegExp(useWordBoundary ? `\\b${esc}\\b` : esc, 'gi');
+
+      if (re.test(modifiedText)) {
+        const ph = `__GLOSSARY_${i++}__`;
+        placeholders[ph] = translation;
+        modifiedText = modifiedText.replace(re, ph);
+      }
+    }
+    return { modifiedText, placeholders };
+  },
+
+  // فكّ الـ placeholders بعد الترجمة
+  revertPlaceholders(text, placeholders) {
+    if (!placeholders || !text) return text;
+    let out = text;
+    for (const [ph, tr] of Object.entries(placeholders)) {
+      out = out.split(ph).join(tr);
+    }
+    return out;
+  }
+},
+
         
         // --- SECURITY ---
         security: {
