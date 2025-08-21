@@ -2429,45 +2429,72 @@
         },
         
         history: {
-            stack: [], currentIndex: -1, timeout: null,
-            init() { this.updateButtons(); },
-            push(state) {
-                const MAX_HISTORY = TranslatorApp.constants.HISTORY_MAX;
-                if (this.timeout) clearTimeout(this.timeout);
-                this.timeout = setTimeout(() => {
-                    try {
-                    this.stack = this.stack.slice(0, this.currentIndex + 1);
-                    const snapshot = (window.structuredClone ? structuredClone(state) : JSON.parse(JSON.stringify(state)));
-                    this.stack.push(snapshot);
-                    if (this.stack.length > MAX_HISTORY) { this.stack.shift(); } else { this.currentIndex++; }
-                    this.updateButtons();
-                    } catch (error) {
-                        console.error('History push error:', error);
-                        // Reset history if there's an error
-                        this.stack = [];
-                        this.currentIndex = -1;
-                        this.updateButtons();
-                    }
-                }, 400);
-            },
-            undo() { if (this.currentIndex > 0) { this.currentIndex--; this.restore(this.stack[this.currentIndex]); } },
-            redo() { if (this.currentIndex < this.stack.length - 1) { this.currentIndex++; this.restore(this.stack[this.currentIndex]); } },
-            restore(state) {
-                try {
-                TranslatorApp.state.translatedJsonData = (window.structuredClone ? structuredClone(state) : JSON.parse(JSON.stringify(state)));
-                    TranslatorApp.preview.render(); 
-                    this.updateButtons(); 
-                    TranslatorApp.state.hasUnsavedChanges = true;
-                } catch (error) {
-                    console.error('History restore error:', error);
-                    TranslatorApp.ui.showAlert('فشل في استعادة الحالة السابقة.', 'error');
+    stack: [], 
+    currentIndex: -1, 
+    timeout: null,
+    
+    init() { 
+        this.updateButtons(); 
+    },
+    
+    push(state) {
+        const MAX_HISTORY = TranslatorApp.constants.HISTORY_MAX;
+        if (this.timeout) clearTimeout(this.timeout);
+        
+        this.timeout = setTimeout(() => {
+            try {
+                this.stack = this.stack.slice(0, this.currentIndex + 1);
+                const snapshot = (window.structuredClone ? structuredClone(state) : JSON.parse(JSON.stringify(state)));
+                this.stack.push(snapshot);
+                
+                if (this.stack.length > MAX_HISTORY) { 
+                    this.stack.shift(); 
+                } else { 
+                    this.currentIndex++; 
                 }
-            },
-            updateButtons() {
-                TranslatorApp.dom.undoBtn.disabled = this.currentIndex <= 0;
-                TranslatorApp.dom.redoBtn.disabled = this.currentIndex >= this.stack.length - 1;
+                
+                this.updateButtons();
+            } catch (error) {
+                console.error('History push error:', error);
+                // Reset history if there's an error
+                this.stack = [];
+                this.currentIndex = -1;
+                this.updateButtons();
             }
-        },
+        }, 400);
+    },
+    
+    undo() { 
+        if (this.currentIndex > 0) { 
+            this.currentIndex--; 
+            this.restore(this.stack[this.currentIndex]); 
+        } 
+    },
+    
+    redo() { 
+        if (this.currentIndex < this.stack.length - 1) { 
+            this.currentIndex++; 
+            this.restore(this.stack[this.currentIndex]); 
+        } 
+    },
+    
+    restore(state) {
+        try {
+            TranslatorApp.state.translatedJsonData = (window.structuredClone ? structuredClone(state) : JSON.parse(JSON.stringify(state)));
+            TranslatorApp.preview.render(); 
+            this.updateButtons(); 
+            TranslatorApp.state.hasUnsavedChanges = true;
+        } catch (error) {
+            console.error('History restore error:', error);
+            TranslatorApp.ui.showAlert('فشل في استعادة الحالة السابقة.', 'error');
+        }
+    },
+    
+    updateButtons() {
+        TranslatorApp.dom.undoBtn.disabled = this.currentIndex <= 0;
+        TranslatorApp.dom.redoBtn.disabled = this.currentIndex >= this.stack.length - 1;
+    }
+},
 
         // استبدال الدالة بالكامل بالنسخة الجديدة (تحليل HTML وتوليد مهام لعُقد النص)
         async startTranslationProcess() {
