@@ -2586,7 +2586,7 @@
                 // تحديث عقد النص مباشرة
                 allJobs.forEach(job => {
                   const cacheKey = job.realOriginalText || job.originalText;
-                    const translatedText = this.state.translationCache.get(cacheKey);**
+                    const translatedText = this.state.translationCache.get(cacheKey);
                     if (translatedText && job.domNode) {
                         job.domNode.nodeValue = translatedText;
                     }
