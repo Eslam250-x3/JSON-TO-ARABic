@@ -2583,7 +2583,6 @@
                 this.ui.updateProgress('جاري إعادة بناء المحتوى المترجم...');
 
                 // تحديث عقد النص مباشرة
-                // تحديث عقد النص مباشرة
                 allJobs.forEach(job => {
                   const cacheKey = job.realOriginalText || job.originalText;
                     const translatedText = this.state.translationCache.get(cacheKey);
@@ -2612,7 +2611,7 @@
                 this.preview.render();
                 const stats = this.statistics.calculate();
                 this.ui.renderStatistics(stats);
-                this.ui.showAlert('تمت الترجمة بنجاح بمنطق الفصل المتقدم ✅', 'success');
+               this.ui.showAlert('تمت الترجمة بنجاح', 'success');
 
             } catch (error) {
                 if (error?.name !== 'AbortError') {
