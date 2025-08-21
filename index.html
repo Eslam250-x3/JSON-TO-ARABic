@@ -506,7 +506,7 @@
         </div>
 
         <div id="progressContainer" class="hidden main-card p-6 rounded-2xl shadow-lg mb-6 text-center">
-            <div class="w-16 h-16 border-4 border-dashed rounded-full animate-spin mx-auto" style="border-color: var(--primary-color); border-top-color: transparent;"></div>
+            <div class="w-16 h-16 border-4 border-dashed rounded-full animate-spin mx-auto" style="border-color: var (--primary-color); border-top-color: transparent;"></div>
             <p id="progressText" class="mt-4 text-lg font-semibold">جاري الترجمة...</p>
             <div class="mt-3">
                 <button id="cancelTranslationBtn" class="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600">إلغاء</button>
@@ -596,7 +596,7 @@
                 </select>
             </div>
             <button id="addGlossaryTermBtn" class="text-white px-4 py-2 rounded-lg w-full mb-4" style="background-color: var(--primary-color);">إضافة مصطلح</button>
-            <hr class="my-4" style="border-color: var(--card-border);">
+            <hr class="my-4" style="border-color: var (--card-border);">
             <h4 class="text-lg font-semibold mb-2">المصطلحات المحفوظة</h4>
             <div id="glossaryListContainer" class="max-h-60 overflow-y-auto p-2 rounded-md" style="background-color: var(--bg-color);"></div>
         </div>
@@ -2736,7 +2736,7 @@
                 TranslatorApp.state.selectedFilesInfo.forEach((fileInfo, index) => {
                         const li = document.createElement('li'); 
                         li.className = 'flex justify-between items-center p-2 rounded-lg';
-                    li.style.backgroundColor = 'color-mix(in srgb, var(--primary-color) 5%, var(--card-bg))';
+                    li.style.backgroundColor = 'color-mix(in srgb, var (--primary-color) 5%, var(--card-bg))';
                         li.innerHTML = `<span class="font-medium">${TranslatorApp.security.sanitize(fileInfo.name)}</span><button data-index="${index}" class="remove-file-btn text-red-500 hover:text-red-700 font-bold text-xl" aria-label="إزالة">&times;</button>`;
                     ul.appendChild(li);
                 });
@@ -2838,8 +2838,8 @@
                 Object.entries(map).forEach(([label, value]) => {
                         const card = document.createElement('div'); 
                         card.className = 'p-4 rounded-lg';
-                    card.style.backgroundColor = 'color-mix(in srgb, var(--primary-color) 10%, var(--card-bg))';
-                    card.innerHTML = `<div class="text-2xl font-bold" style="color: var(--primary-color);">${value}</div><div class="text-sm" style="color: var(--secondary-text);">${label}</div>`;
+                    card.style.backgroundColor = 'color-mix(in srgb, var (--primary-color) 10%, var (--card-bg))';
+                    card.innerHTML = `<div class="text-2xl font-bold" style="color: var (--primary-color);">${value}</div><div class="text-sm" style="color: var (--secondary-text);">${label}</div>`;
                     statsContainer.appendChild(card);
                 });
                 } catch (error) {
@@ -3247,7 +3247,7 @@
                             console.warn('Error rendering file:', fileError);
                             const errorDiv = document.createElement('div');
                             errorDiv.className = 'preview-card rounded-2xl shadow-lg overflow-hidden';
-                            errorDiv.innerHTML = `<div class="p-4" style="color: var(--error-color);">خطأ في عرض الملف: ${file.name}</div>`;
+                            errorDiv.innerHTML = `<div class="p-4" style="color: var (--error-color);">خطأ في عرض الملف: ${file.name}</div>`;
                             previewContainer.appendChild(errorDiv);
                         }
                 });
@@ -3256,7 +3256,7 @@
                 } catch (error) {
                     console.error('Preview render error:', error);
                     const { previewContainer } = TranslatorApp.dom;
-                    previewContainer.innerHTML = '<div class="p-4" style="color: var(--error-color);">فشل في عرض المعاينة</div>';
+                    previewContainer.innerHTML = '<div class="p-4" style="color: var (--error-color);">فشل في عرض المعاينة</div>';
                 }
             },
 
@@ -3278,16 +3278,16 @@
                 const directionClass = isMixed ? 'mixed-content' : (textDirection === 'rtl' ? 'rtl-auto' : 'ltr-auto');
                 
                 return `
-                    <div class="border rounded-lg p-4" style="border-color: var(--card-border);">
+                    <div class="border rounded-lg p-4" style="border-color: var (--card-border);">
                             <h5 class="font-bold flex items-center mb-2">${TranslatorApp.security.sanitize(label)}</h5>
-                        <div class="p-3 rounded-lg text-sm ${directionClass}" dir="${dirAttr}" style="background-color: var(--bg-color); color: var(--secondary-text);">${enhancedValue}</div>
+                        <div class="p-3 rounded-lg text-sm ${directionClass}" dir="${dirAttr}" style="background-color: var (--bg-color); color: var (--secondary-text);">${enhancedValue}</div>
                     </div>`;
                 } catch (error) {
                     console.error('Render read only field error:', error);
                     return `
-                        <div class="border rounded-lg p-4" style="border-color: var(--card-border);">
+                        <div class="border rounded-lg p-4" style="border-color: var (--card-border);">
                             <h5 class="font-bold flex items-center mb-2">خطأ في العرض</h5>
-                            <div class="p-3 rounded-lg text-sm" style="background-color: var(--bg-color); color: var(--error-color);">فشل في عرض المحتوى</div>
+                            <div class="p-3 rounded-lg text-sm" style="background-color: var (--bg-color); color: var (--error-color);">فشل في عرض المحتوى</div>
                         </div>`;
                 }
             },
@@ -3303,7 +3303,7 @@
                     const statusId = `status-${fieldId}`;
 
                     return `
-                        <div class="border rounded-lg p-4" style="border-color: var(--card-border);">
+                        <div class="border rounded-lg p-4" style="border-color: var (--card-border);">
                             <div class="flex justify-between items-center mb-2">
                                         <h5 class="font-bold flex items-center">${TranslatorApp.security.sanitize(label)} <span id="${statusId}" class="status-dot status-translated" title="تمت الترجمة"></span></h5>
                                 <div class="flex gap-2">
@@ -3313,11 +3313,11 @@
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <p class="text-sm font-semibold mb-1" style="color: var(--secondary-text);">الأصلي</p>
-                                    <div class="original-text-readonly p-3 rounded-lg text-sm h-full" style="background-color: var(--bg-color); overflow:auto;">${this.renderContentWithMath(originalValue)}</div>
+                                    <p class="text-sm font-semibold mb-1" style="color: var (--secondary-text);">الأصلي</p>
+                                    <div class="original-text-readonly p-3 rounded-lg text-sm h-full" style="background-color: var (--bg-color); overflow:auto;">${this.renderContentWithMath(originalValue)}</div>
                                 </div>
                                 <div>
-                                    <p class="text-sm font-semibold mb-1" style="color: var(--success-color);">المترجم (قابل للتعديل)</p>
+                                    <p class="text-sm font-semibold mb-1" style="color: var (--success-color);">المترجم (قابل للتعديل)</p>
                                     <div id="${fieldId}" 
                                          contenteditable="true"
                                          class="editable-preview-field"
@@ -3328,7 +3328,7 @@
                                 </div>
                             </div>
                             <div class="mt-4 hidden">
-                                 <p class="text-sm font-semibold mb-1" style="color: var(--secondary-text);">مقارنة الفروقات</p>
+                                 <p class="text-sm font-semibold mb-1" style="color: var (--secondary-text);">مقارنة الفروقات</p>
                                 <div id="${diffId}" class="diff-view"></div>
                             </div>
                         </div>`;
@@ -3342,8 +3342,8 @@
 
                 data.parts?.forEach((part, partIndex) => {
                         try {
-                    html += '<div class="border-t pt-4 mt-4 space-y-4" style="border-color: var(--card-border);">';
-                    html += `<h5 class="font-semibold text-md" style="color: var(--secondary-text);">الجزء ${partIndex + 1} (النوع: ${part.type || 'غير محدد'})</h5>`;
+                    html += '<div class="border-t pt-4 mt-4 space-y-4" style="border-color: var (--card-border);">';
+                    html += `<h5 class="font-semibold text-md" style="color: var (--secondary-text);">الجزء ${partIndex + 1} (النوع: ${part.type || 'غير محدد'})</h5>`;
                     const originalPart = TranslatorApp.state.originalJsonData[fileIndex].data.parts[partIndex];
                     
                     html += renderField('السؤال (Stem)', originalPart.stem, part.stem, `parts.${partIndex}.stem`);
@@ -3373,8 +3373,8 @@
                     html += '</div>';
                         } catch (partError) {
                             console.warn('Error rendering part:', partError);
-                            html += '<div class="border-t pt-4 mt-4 space-y-4" style="border-color: var(--card-border);">';
-                            html += `<h5 class="font-semibold text-md" style="color: var(--error-color);">خطأ في عرض الجزء ${partIndex + 1}</h5>`;
+                            html += '<div class="border-t pt-4 mt-4 space-y-4" style="border-color: var (--card-border);">';
+                            html += `<h5 class="font-semibold text-md" style="color: var (--error-color);">خطأ في عرض الجزء ${partIndex + 1}</h5>`;
                             html += '</div>';
                         }
                 });
@@ -3383,7 +3383,7 @@
                 return html;
                 } catch (error) {
                     console.error('Render file content error:', error);
-                    return '<div class="space-y-6"><div class="border rounded-lg p-4" style="border-color: var(--card-border);"><h5 class="font-bold flex items-center mb-2" style="color: var(--error-color);">خطأ في عرض المحتوى</h5><div class="p-3 rounded-lg text-sm" style="background-color: var(--bg-color); color: var(--error-color);">فشل في عرض محتوى الملف</div></div></div>';
+                    return '<div class="space-y-6"><div class="border rounded-lg p-4" style="border-color: var (--card-border);"><h5 class="font-bold flex items-center mb-2" style="color: var (--error-color);">خطأ في عرض المحتوى</h5><div class="p-3 rounded-lg text-sm" style="background-color: var (--bg-color); color: var (--error-color);">فشل في عرض محتوى الملف</div></div></div>';
                 }
             },
 
@@ -3564,7 +3564,7 @@
                 return this.dmp.diff_prettyHtml(d);
                 } catch (error) {
                     console.error('Create diff HTML error:', error);
-                    return `<div style="color: var(--error-color);">فشل في إنشاء مقارنة الفروقات</div>`;
+                    return `<div style="color: var (--error-color);">فشل في إنشاء مقارنة الفروقات</div>`;
                 }
             },
             
