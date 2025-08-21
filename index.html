@@ -2277,8 +2277,9 @@
                         const cacheKey = job.realOriginalText || job.originalText;
                         TranslatorApp.state.translationCache.set(cacheKey, translatedText);
                     });
-                    done += items.length;
-                },
+                        done += items.length;
+                }
+            },
 
             async translateItemsBatch(items, apiKeyOrUrl, provider, localModelName = '', systemPrompt = '') {
                 const CONTEXT_SEPARATOR = TranslatorApp.constants.CONTEXT_SEPARATOR;
