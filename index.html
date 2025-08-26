@@ -1817,7 +1817,7 @@
                             const text = (node.nodeValue || '').trim();
                             if (text) {
                                 // Protect LaTeX and HTML content before sending for translation
-                                const { protectedText, placeholders } = TranslatorApp.utils.protectSegments(text);
+                                const { protectedText, placeholders } = TranslatorApp.quality.protectSegments(text);
                                 jobs.push({
                                     type: 'text_node',
                                     originalText: protectedText,
@@ -2888,11 +2888,8 @@
                         const processField = (htmlString, basePointer) => {
                             if (!htmlString || typeof htmlString !== 'string') return;
                             
-                            // First protect any LaTeX or special content in the HTML string itself
-                            const { protectedText } = this.utils.protectSegments(htmlString);
-                            
-                            // Then parse the protected HTML
-                            const { jobs, parsedBody } = this.utils.parseHtmlAndCreateJobs(protectedText, basePointer);
+                            // Then parse the HTML
+                            const { jobs, parsedBody } = this.utils.parseHtmlAndCreateJobs(htmlString, basePointer);
                             allJobs.push(...jobs);
 
                             const mapKey = JSON.stringify(basePointer);
@@ -2957,7 +2954,7 @@
                         if (translatedText && job.domNode) {
                             // Restore any protected segments (LaTeX, HTML) using the stored placeholders
                             if (job.placeholders) {
-                                translatedText = TranslatorApp.utils.restoreSegments(translatedText, job.placeholders);
+                                translatedText = TranslatorApp.quality.restoreSegments(translatedText, job.placeholders);
                             }
                             job.domNode.nodeValue = translatedText;
                         }
