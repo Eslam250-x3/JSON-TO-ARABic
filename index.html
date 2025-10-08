@@ -181,6 +181,89 @@
         .status-translated {
             background-color: var(--success-color);
         }
+        
+        /* Field State Colors */
+        .field-warning {
+            border-right: 4px solid var(--warning-color) !important;
+        }
+        
+        .field-error {
+            border-right: 4px solid var(--error-color) !important;
+        }
+        
+        .field-success {
+            border-right: 4px solid var(--success-color) !important;
+        }
+        
+        .field-edited {
+            background-color: color-mix(in srgb, var(--warning-color) 5%, var(--card-bg)) !important;
+        }
+        
+        /* Quality Badges */
+        .quality-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            opacity: 0.3;
+            cursor: help;
+            transition: all 0.2s;
+        }
+        
+        .quality-badge.valid {
+            opacity: 1;
+            background-color: #10b981;
+            color: white;
+        }
+        
+        .quality-badge.invalid {
+            opacity: 1;
+            background-color: #ef4444;
+            color: white;
+        }
+        
+        /* Action Buttons */
+        .action-btn {
+            padding: 4px 8px;
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            background: var(--card-bg);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        
+        .action-btn:hover {
+            background-color: var(--primary-color);
+            color: white;
+            transform: scale(1.1);
+        }
+        
+        /* Progress Bars */
+        .file-progress-bar {
+            width: 100%;
+            background-color: #e5e7eb;
+            border-radius: 9999px;
+            height: 0.5rem;
+            margin-top: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .file-progress-fill {
+            background-color: #10b981;
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 0.3s ease;
+        }
+        
+        /* Review Mode */
+        .review-mode .translated-content {
+            filter: blur(8px);
+            transition: filter 0.3s;
+        }
+        
+        .review-mode .translated-content:hover {
+            filter: blur(0px);
+        }
 
         .status-edited {
             background-color: #f59e0b;
@@ -204,9 +287,10 @@
         .math-field-delete-btn {
             position: absolute;
             top: -10px;
-            left: -10px; /* Position it at the top-left corner */
+            left: -10px;
             background-color: var(--error-color);
             color: white;
+            border: none;
             border-radius: 50%;
             width: 20px;
             height: 20px;
@@ -222,10 +306,45 @@
             transition: opacity 0.2s, visibility 0.2s;
             z-index: 10;
         }
+        
+        .math-field-copy-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 10;
+        }
+        
         math-field:hover .math-field-delete-btn,
-        math-field:focus-within .math-field-delete-btn {
+        math-field:focus-within .math-field-delete-btn,
+        math-field:hover .math-field-copy-btn,
+        math-field:focus-within .math-field-copy-btn {
             opacity: 1;
             visibility: visible;
+        }
+        
+        .math-field-delete-btn:hover {
+            background-color: #dc2626;
+            transform: scale(1.1);
+        }
+        
+        .math-field-copy-btn:hover {
+            background-color: var(--success-color);
+            transform: scale(1.1);
         }
         /* MathLive default look (editable) */
         math-field {
@@ -239,6 +358,9 @@
             margin: 2px;
             max-width: 100%;
             white-space: nowrap;
+            /* Force LTR for all math content - critical for equations */
+            direction: ltr !important;
+            unicode-bidi: embed;
         }
 
         /* Higher-fidelity preview to match source system: make formulas look inline and unboxed inside preview */
@@ -537,13 +659,25 @@
 
         /* Special handling for mixed content in preview */
         .content-root {
-            direction: rtl;
-            text-align: right;
-            unicode-bidi: bidi-override;
+            unicode-bidi: plaintext;
         }
 
         .content-root * {
             unicode-bidi: embed;
+        }
+        
+        /* Ensure proper RTL direction for Arabic content */
+        .editable-preview-field .content-root[dir="rtl"],
+        .original-text-readonly .content-root[dir="rtl"] {
+            direction: rtl;
+            text-align: right;
+        }
+        
+        /* Ensure proper LTR direction for English content */
+        .editable-preview-field .content-root[dir="ltr"],
+        .original-text-readonly .content-root[dir="ltr"] {
+            direction: ltr;
+            text-align: left;
         }
 
         /* Handle English phrases within Arabic text */
@@ -731,6 +865,10 @@
                                 style="color: var(--primary-color);">
                             <span class="text-sm font-medium">استخدام ذاكرة الترجمة (TM)</span>
                         </label>
+                        <div class="mt-1 mr-6 flex items-center gap-2">
+                            <span id="tmStats" class="text-xs" style="color: var(--secondary-text);">جاري التحميل...</span>
+                            <button id="clearTmBtn" type="button" class="text-xs px-2 py-1 rounded hover:opacity-75" style="background-color: var(--error-color); color: white;">مسح الذاكرة</button>
+                        </div>
                     </div>
                     <div class="mb-6">
                         <label class="inline-flex items-center gap-2">
@@ -744,17 +882,6 @@
                         style="background-color: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));">
                         <button id="manageSubjectsBtn" type="button" class="font-semibold"
                             style="color: var(--primary-color);">📚 إدارة المواد والصفوف</button>
-                    </div>
-
-                    <div class="flex items-center justify-between mb-6 p-3 rounded-lg"
-                        style="background-color: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));">
-                        <button id="manageGlossaryBtn" type="button" class="font-semibold"
-                            style="color: var(--primary-color);">📖 إدارة القاموس المخصص</button>
-                        <div class="flex items-center">
-                            <input id="useGlossaryCheckbox" type="checkbox" class="h-4 w-4 rounded focus:ring-2"
-                                style="color: var(--primary-color);">
-                            <label for="useGlossaryCheckbox" class="mr-2 text-sm font-medium">استخدام القاموس</label>
-                        </div>
                     </div>
 
                     <div class="flex items-center justify-between p-3 rounded-lg"
@@ -819,30 +946,110 @@
                             title="تحرير النص فوق الصور (أرقام/رموز)">🖊️ محرر الصور</button>
                     </div>
                 </div>
+                <!-- لوحة الإحصائيات السريعة -->
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 my-4">
+                    <div class="p-3 rounded-lg text-center" style="background-color: var(--bg-color); border: 1px solid var(--card-border);">
+                        <div class="text-2xl font-bold" style="color: var(--primary-color);" id="totalFieldsCount">0</div>
+                        <div class="text-xs" style="color: var(--secondary-text);">إجمالي الحقول</div>
+                    </div>
+                    <div class="p-3 rounded-lg text-center" style="background-color: var(--bg-color); border: 1px solid var(--card-border);">
+                        <div class="text-2xl font-bold" style="color: var(--success-color);" id="completedFieldsCount">0</div>
+                        <div class="text-xs" style="color: var(--secondary-text);">مكتملة</div>
+                    </div>
+                    <div class="p-3 rounded-lg text-center" style="background-color: var(--bg-color); border: 1px solid var(--card-border);">
+                        <div class="text-2xl font-bold" style="color: var(--warning-color);" id="editedFieldsCount">0</div>
+                        <div class="text-xs" style="color: var(--secondary-text);">معدّلة يدوياً</div>
+                    </div>
+                    <div class="p-3 rounded-lg text-center" style="background-color: var(--bg-color); border: 1px solid var(--card-border);">
+                        <div class="text-2xl font-bold" style="color: var(--error-color);" id="warningsCount">0</div>
+                        <div class="text-xs" style="color: var(--secondary-text);">تحذيرات</div>
+                    </div>
+                    <div class="p-3 rounded-lg text-center" style="background-color: var(--bg-color); border: 1px solid var(--card-border);">
+                        <div class="text-2xl font-bold" style="color: var(--primary-color);" id="progressPercentage">0%</div>
+                        <div class="text-xs" style="color: var(--secondary-text);">نسبة الإنجاز</div>
+                    </div>
+                </div>
+
                 <div class="preview-controls my-4 p-4 rounded-lg"
                     style="background-color: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));">
-                    <div class="flex flex-wrap gap-4 items-center">
+                    <!-- البحث -->
+                    <div class="flex flex-wrap gap-4 items-center mb-3">
                         <div class="flex-grow">
-                            <input type="text" id="searchPreview" placeholder="البحث في النص الأصلي..."
+                            <input type="text" id="searchPreview" placeholder="البحث في النص الأصلي أو الترجمة..."
                                 class="w-full p-2 border rounded-lg">
                         </div>
+                    </div>
+                    
+                    <!-- الفلاتر المتقدمة -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                        <select id="filterByType" class="p-2 border rounded-lg text-sm">
+                            <option value="all">جميع الأنواع</option>
+                            <option value="mcq">اختيار من متعدد</option>
+                            <option value="input_box">صندوق إدخال</option>
+                            <option value="gap_match">ملء الفراغات</option>
+                            <option value="true_false">صح/خطأ</option>
+                        </select>
+                        
+                        <select id="filterByStatus" class="p-2 border rounded-lg text-sm">
+                            <option value="all">جميع الحالات</option>
+                            <option value="translated">مترجمة آلياً</option>
+                            <option value="edited">معدّلة يدوياً</option>
+                            <option value="warnings">بها تحذيرات</option>
+                        </select>
+                        
+                        <select id="sortBy" class="p-2 border rounded-lg text-sm">
+                            <option value="default">الترتيب الافتراضي</option>
+                            <option value="warnings">الأكثر تحذيرات</option>
+                            <option value="longest">الأطول أولاً</option>
+                            <option value="shortest">الأقصر أولاً</option>
+                        </select>
+                        
+                        <button id="clearFiltersBtn" class="p-2 border rounded-lg text-sm hover:bg-gray-100">
+                            🔄 إعادة تعيين
+                        </button>
+                    </div>
+                    
+                    <!-- أزرار الإجراءات السريعة -->
+                    <div class="flex flex-wrap gap-2">
+                        <button id="validateAllBtn" class="text-xs px-3 py-2 rounded-lg" 
+                                style="background-color: var(--primary-color); color: white;">
+                            ✓ التحقق من جميع الحقول
+                        </button>
+                        
+                        <button id="expandAllBtn" class="text-xs px-3 py-2 rounded-lg border">
+                            📂 فتح جميع الملفات
+                        </button>
+                        
+                        <button id="collapseAllBtn" class="text-xs px-3 py-2 rounded-lg border">
+                            📁 إغلاق جميع الملفات
+                        </button>
+                        
+                        <button id="jumpToWarningsBtn" class="text-xs px-3 py-2 rounded-lg" 
+                                style="background-color: var(--error-color); color: white;">
+                            ⚠️ الانتقال للتحذيرات
+                        </button>
+                        
+                        <button id="reviewModeBtn" class="text-xs px-3 py-2 rounded-lg border">
+                            👁️ وضع المراجعة
+                        </button>
                     </div>
                 </div>
             </div>
 
             <div id="previewContainer" class="space-y-4"></div>
 
-            <div class="main-card mt-8 p-4 rounded-2xl shadow-lg flex items-center justify-center gap-4">
-                <label for="exportFormat" class="font-semibold">تنسيق التصدير:</label>
-                <select id="exportFormat" class="p-2 rounded-lg">
-                    <option value="json">JSON</option>
-                    <option value="csv">CSV</option>
-                </select>
-                <button id="exportBtn"
-                    class="text-white font-bold py-3 px-6 rounded-lg transition-transform transform hover:scale-105"
-                    style="background-color: var(--success-color);">
-                    تصدير الملفات المترجمة
-                </button>
+            <div class="main-card mt-8 p-4 rounded-2xl shadow-lg">
+                <div class="flex items-center justify-center gap-4 mb-4">
+                    <div class="text-center">
+                        <p class="font-semibold mb-2">تصدير بصيغة JSON</p>
+                        <p class="text-sm" style="color: var(--secondary-text);">يحافظ على البنية الأصلية للبيانات مع جميع الخصائص والعلاقات</p>
+                    </div>
+                    <button id="exportBtn"
+                        class="text-white font-bold py-3 px-6 rounded-lg transition-transform transform hover:scale-105"
+                        style="background-color: var(--success-color);">
+                        تصدير الملفات المترجمة
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -866,48 +1073,6 @@
             </div>
         </div>
     </div>
-    <div id="glossaryModal"
-        class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div class="main-card rounded-2xl shadow-xl p-6 w-full max-w-2xl transform transition-all" role="dialog"
-            aria-labelledby="glossaryTitle">
-            <div class="flex justify-between items-center">
-                <h3 id="glossaryTitle" class="text-2xl font-bold" style="color: var(--primary-color);">القاموس المخصص
-                </h3>
-                <button id="closeGlossaryModalBtn" class="text-2xl hover:opacity-75" aria-label="إغلاق">&times;</button>
-            </div>
-            <p class="text-sm mt-1 mb-4" style="color: var(--secondary-text);">أضف المصطلحات وترجمتها المعتمدة لضمان
-                الاتساق.</p>
-            <div class="flex flex-wrap gap-2 mb-4">
-                <button id="importGlossaryBtn" class="flex-1 px-4 py-2 text-white rounded-lg"
-                    style="background-color: var(--primary-color);">استيراد</button>
-                <button id="exportGlossaryBtn" class="flex-1 px-4 py-2 text-white rounded-lg"
-                    style="background-color: var(--success-color);">تصدير (CSV)</button>
-                <input type="file" id="glossaryFileInput" accept=".json,.csv" class="hidden">
-            </div>
-            <input type="text" id="glossarySearch" placeholder="البحث في القاموس..."
-                class="w-full p-2 mb-4 border rounded-lg">
-
-            <div class="grid md:grid-cols-3 gap-4 mb-4">
-                <input type="text" id="glossaryTerm" placeholder="المصطلح الأصلي"
-                    class="md:col-span-1 block w-full p-2 border rounded-md shadow-sm">
-                <input type="text" id="glossaryTranslation" placeholder="الترجمة المعتمدة"
-                    class="md:col-span-1 block w-full p-2 border rounded-md shadow-sm">
-                <select id="glossaryCategory" class="md:col-span-1 block w-full p-2 border rounded-md shadow-sm">
-                    <option value="general">عام</option>
-                    <option value="technical">تقني</option>
-                    <option value="medical">طبي</option>
-                    <option value="legal">قانوني</option>
-                </select>
-            </div>
-            <button id="addGlossaryTermBtn" class="text-white px-4 py-2 rounded-lg w-full mb-4"
-                style="background-color: var(--primary-color);">إضافة مصطلح</button>
-            <hr class="my-4" style="border-color: var (--card-border);">
-            <h4 class="text-lg font-semibold mb-2">المصطلحات المحفوظة</h4>
-            <div id="glossaryListContainer" class="max-h-60 overflow-y-auto p-2 rounded-md"
-                style="background-color: var(--bg-color);"></div>
-        </div>
-    </div>
-
     <div id="mappedIdsModal"
         class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div class="main-card rounded-2xl shadow-xl p-6 w-full max-w-2xl transform transition-all" role="dialog"
@@ -946,8 +1111,7 @@
                     والصفوف</h3>
                 <button id="closeSubjectsModalBtn" class="text-2xl hover:opacity-75" aria-label="إغلاق">&times;</button>
             </div>
-            <p class="text-sm mt-1 mb-4" style="color: var(--secondary-text);">اختر المادة والصف لتطبيق تعليمات ترجمة
-                مخصصة.</p>
+            <p class="text-sm mt-1 mb-4" style="color: var(--secondary-text);">اختر المادة والصف لتطبيق تعليمات ترجمة مخصصة وجلب المصطلحات المناسبة.</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <select id="subjectSelect" class="p-2 border rounded-lg w-full"></select>
                 <select id="gradeSelect" class="p-2 border rounded-lg w-full"></select>
@@ -975,7 +1139,7 @@
                 selectedFilesInfo: [],
                 originalJsonData: [],
                 translatedJsonData: [],
-                glossary: [],
+                initialTranslatedJsonData: [],
                 activeScreen: 'setup',
                 translationCache: new Map(),
                 startTime: null,
@@ -1016,14 +1180,33 @@
                     this.theme.init();
                     this.history.init();
                     this.subjects.init();
+                    this.translationMemory.init();
                     this.session.load();
                     this.shortcuts.init();
                     this.autoSave.init();
                     this.addBeforeUnloadGuard();
                     // Initialize shared MathLive virtual keyboard if available
                     try {
-                        if (window.MathfieldElement && typeof MathfieldElement.makeSharedVirtualKeyboard === 'function') {
-                            MathfieldElement.makeSharedVirtualKeyboard();
+                        if (window.MathfieldElement) {
+                            // Configure MathLive defaults
+                            if (window.MathfieldElement.defaultConfig) {
+                                window.MathfieldElement.defaultConfig = {
+                                    ...window.MathfieldElement.defaultConfig,
+                                    virtualKeyboardMode: 'onfocus',
+                                    virtualKeyboardTheme: 'material',
+                                    virtualKeyboards: 'numeric symbols greek',
+                                    inlineShortcuts: true,
+                                    smartMode: true,
+                                    smartFence: true,
+                                    smartSuperscript: true,
+                                    keypressVibration: true,
+                                };
+                            }
+                            
+                            // Create shared virtual keyboard
+                            if (typeof MathfieldElement.makeSharedVirtualKeyboard === 'function') {
+                                MathfieldElement.makeSharedVirtualKeyboard();
+                            }
                         }
                     } catch (mathError) {
                         console.warn('MathLive initialization error:', mathError);
@@ -1044,16 +1227,9 @@
                         localModelGroup: 'localModelGroup', localModelUrl: 'localModelUrl', localModelName: 'localModelName',
                         setupSection: 'setupSection', progressContainer: 'progressContainer', progressText: 'progressText',
                         previewSection: 'previewSection', previewContainer: 'previewContainer', exportBtn: 'exportBtn',
-                        manageGlossaryBtn: 'manageGlossaryBtn', glossaryModal: 'glossaryModal',
-                        closeGlossaryModalBtn: 'closeGlossaryModalBtn', addGlossaryTermBtn: 'addGlossaryTermBtn',
-                        glossaryTermInput: 'glossaryTerm', glossaryTranslationInput: 'glossaryTranslation',
-                        glossaryListContainer: 'glossaryListContainer', useGlossaryCheckbox: 'useGlossaryCheckbox',
                         themeToggle: 'theme-toggle', analyticsSection: 'analyticsSection',
-                        statsContainer: 'statsContainer', exportFormat: 'exportFormat',
+                        statsContainer: 'statsContainer',
                         searchPreview: 'searchPreview', undoBtn: 'undoBtn', redoBtn: 'redoBtn',
-                        importGlossaryBtn: 'importGlossaryBtn', exportGlossaryBtn: 'exportGlossaryBtn',
-                        glossaryFileInput: 'glossaryFileInput', glossarySearch: 'glossarySearch',
-                        glossaryCategory: 'glossaryCategory',
                         imageAnnotatorModal: 'imageAnnotatorModal',
                         imageAnnotatorCanvas: 'imageAnnotatorCanvas',
                         imageAnnotatorClose: 'imageAnnotatorClose',
@@ -1067,7 +1243,13 @@
                         gradeSelect: 'gradeSelect', promptPreview: 'promptPreview', applyPromptBtn: 'applyPromptBtn',
                         cancelTranslationBtn: 'cancelTranslationBtn', saveIndicator: 'saveIndicator',
                         ephemeralKeysCheckbox: 'ephemeralKeysCheckbox',
-                        useTmCheckbox: 'useTmCheckbox', useProofreadCheckbox: 'useProofreadCheckbox', translatorSelect: 'translatorSelect'
+                        useTmCheckbox: 'useTmCheckbox', useProofreadCheckbox: 'useProofreadCheckbox', translatorSelect: 'translatorSelect',
+                        tmStats: 'tmStats', clearTmBtn: 'clearTmBtn',
+                        totalFieldsCount: 'totalFieldsCount', completedFieldsCount: 'completedFieldsCount',
+                        editedFieldsCount: 'editedFieldsCount', warningsCount: 'warningsCount', progressPercentage: 'progressPercentage',
+                        filterByType: 'filterByType', filterByStatus: 'filterByStatus', sortBy: 'sortBy', clearFiltersBtn: 'clearFiltersBtn',
+                        validateAllBtn: 'validateAllBtn', expandAllBtn: 'expandAllBtn', collapseAllBtn: 'collapseAllBtn',
+                        jumpToWarningsBtn: 'jumpToWarningsBtn', reviewModeBtn: 'reviewModeBtn'
                     };
                     for (const k in ids) {
                         try {
@@ -1106,25 +1288,54 @@
                         }
                     });
                     this.dom.previewContainer.addEventListener('keydown', (e) => {
-                        // ...existing code for Ctrl+M shortcut...
-
-                        // Add this new section for handling Backspace/Delete
+                        // Protect math-fields from accidental deletion
                         if (e.key === 'Backspace' || e.key === 'Delete') {
                             const selection = window.getSelection();
                             if (!selection.rangeCount) return;
 
                             const range = selection.getRangeAt(0);
                             const focusNode = range.startContainer;
-                            const parentMathField = focusNode.parentNode.closest('math-field');
-                    
-                            // Check if the parent is a math-field element and its content is empty
+                            
+                            // Check if we're inside a math-field
+                            const parentMathField = focusNode.parentNode?.closest('math-field');
+                            
+                            // Only delete math-field if it's empty AND user is inside it
                             if (parentMathField && parentMathField.value.trim() === '') {
                                 e.preventDefault();
                                 const fieldContainer = parentMathField.closest('.editable-preview-field');
                                 parentMathField.remove();
                                 if (fieldContainer) {
-                                    // Trigger an update after deletion
                                     TranslatorApp.preview.handlePreviewFieldUpdate(fieldContainer);
+                                }
+                                return;
+                            }
+                            
+                            // Prevent deletion of math-field when deleting adjacent text
+                            const editableField = focusNode.parentNode?.closest('.editable-preview-field');
+                            if (!editableField) return;
+                            
+                            // Check if we're about to delete into a math-field
+                            if (e.key === 'Backspace') {
+                                const prevSibling = range.startContainer.previousSibling;
+                                if (prevSibling?.tagName === 'MATH-FIELD' && range.startOffset === 0) {
+                                    // Place cursor before math-field instead of deleting it
+                                    e.preventDefault();
+                                    const newRange = document.createRange();
+                                    newRange.setStartBefore(prevSibling);
+                                    newRange.collapse(true);
+                                    selection.removeAllRanges();
+                                    selection.addRange(newRange);
+                                }
+                            } else if (e.key === 'Delete') {
+                                const nextSibling = range.startContainer.nextSibling;
+                                if (nextSibling?.tagName === 'MATH-FIELD') {
+                                    // Place cursor after math-field instead of deleting it
+                                    e.preventDefault();
+                                    const newRange = document.createRange();
+                                    newRange.setStartAfter(nextSibling);
+                                    newRange.collapse(true);
+                                    selection.removeAllRanges();
+                                    selection.addRange(newRange);
                                 }
                             }
                         }
@@ -1229,10 +1440,107 @@
                     });
                     this.dom.exportBtn.addEventListener('click', (e) => {
                         try {
-                            this.export.exportAs(this.dom.exportFormat.value);
+                            this.export.exportAs('json');
                         } catch (error) {
                             console.error('Export error:', error);
                             TranslatorApp.ui.showAlert('فشل في تصدير الملفات.', 'error');
+                        }
+                    });
+                    
+                    // New feature: Expand/Collapse All
+                    this.dom.expandAllBtn?.addEventListener('click', () => {
+                        try {
+                            document.querySelectorAll('.accordion-content').forEach(content => {
+                                content.style.maxHeight = content.scrollHeight + "px";
+                                const parent = content.closest('.preview-card');
+                                if (parent) parent.classList.add('open');
+                            });
+                        } catch (error) {
+                            console.error('Expand all error:', error);
+                        }
+                    });
+                    
+                    this.dom.collapseAllBtn?.addEventListener('click', () => {
+                        try {
+                            document.querySelectorAll('.accordion-content').forEach(content => {
+                                content.style.maxHeight = null;
+                                const parent = content.closest('.preview-card');
+                                if (parent) parent.classList.remove('open');
+                            });
+                        } catch (error) {
+                            console.error('Collapse all error:', error);
+                        }
+                    });
+                    
+                    // Jump to warnings
+                    this.dom.jumpToWarningsBtn?.addEventListener('click', () => {
+                        try {
+                            const firstWarning = document.querySelector('.field-error, .field-warning');
+                            if (firstWarning) {
+                                firstWarning.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                firstWarning.style.animation = 'pulse 1s ease-in-out 3';
+                            } else {
+                                TranslatorApp.ui.showAlert('لا توجد تحذيرات', 'success', 2000);
+                            }
+                        } catch (error) {
+                            console.error('Jump to warnings error:', error);
+                        }
+                    });
+                    
+                    // Validate all fields
+                    this.dom.validateAllBtn?.addEventListener('click', () => {
+                        try {
+                            TranslatorApp.preview.validateAllFields();
+                        } catch (error) {
+                            console.error('Validate all error:', error);
+                        }
+                    });
+                    
+                    // Review mode toggle
+                    this.dom.reviewModeBtn?.addEventListener('click', () => {
+                        try {
+                            const previewSection = document.getElementById('previewSection');
+                            previewSection?.classList.toggle('review-mode');
+                            const isReviewMode = previewSection?.classList.contains('review-mode');
+                            this.dom.reviewModeBtn.textContent = isReviewMode ? '✓ إنهاء المراجعة' : '👁️ وضع المراجعة';
+                        } catch (error) {
+                            console.error('Review mode toggle error:', error);
+                        }
+                    });
+                    
+                    // Filters
+                    this.dom.filterByType?.addEventListener('change', () => {
+                        try {
+                            TranslatorApp.preview.applyFilters();
+                        } catch (error) {
+                            console.error('Filter by type error:', error);
+                        }
+                    });
+                    
+                    this.dom.filterByStatus?.addEventListener('change', () => {
+                        try {
+                            TranslatorApp.preview.applyFilters();
+                        } catch (error) {
+                            console.error('Filter by status error:', error);
+                        }
+                    });
+                    
+                    this.dom.sortBy?.addEventListener('change', () => {
+                        try {
+                            TranslatorApp.preview.applyFilters();
+                        } catch (error) {
+                            console.error('Sort by error:', error);
+                        }
+                    });
+                    
+                    this.dom.clearFiltersBtn?.addEventListener('click', () => {
+                        try {
+                            if (this.dom.filterByType) this.dom.filterByType.value = 'all';
+                            if (this.dom.filterByStatus) this.dom.filterByStatus.value = 'all';
+                            if (this.dom.sortBy) this.dom.sortBy.value = 'default';
+                            TranslatorApp.preview.applyFilters();
+                        } catch (error) {
+                            console.error('Clear filters error:', error);
                         }
                     });
                     this.dom.geminiKeyInput.addEventListener('input', (e) => {
@@ -1294,6 +1602,7 @@
                     this.dom.useTmCheckbox.addEventListener('change', (e) => {
                         try {
                             this.state.hasUnsavedChanges = true;
+                            this.translationMemory.updateUI();
                         } catch (error) {
                             console.error('Use TM checkbox error:', error);
                         }
@@ -1303,6 +1612,18 @@
                             this.state.hasUnsavedChanges = true;
                         } catch (error) {
                             console.error('Use proofread checkbox error:', error);
+                        }
+                    });
+                    
+                    this.dom.clearTmBtn.addEventListener('click', (e) => {
+                        try {
+                            if (confirm('هل أنت متأكد من حذف جميع الترجمات المحفوظة؟\nلن تتمكن من استعادتها بعد الحذف.')) {
+                                this.translationMemory.clear();
+                                this.translationMemory.updateUI();
+                                this.ui.showAlert('تم مسح ذاكرة الترجمة بنجاح', 'success');
+                            }
+                        } catch (error) {
+                            console.error('Clear TM error:', error);
                         }
                     });
 
@@ -1329,70 +1650,6 @@
                             TranslatorApp.ui.showAlert('فشل في الإعادة.', 'error');
                         }
                     });
-
-                    this.dom.manageGlossaryBtn.addEventListener('click', () => {
-                        try {
-                            this.ui.showGlossaryModal(true);
-                        } catch (error) {
-                            console.error('Show glossary modal error:', error);
-                        }
-                    });
-                    this.dom.closeGlossaryModalBtn.addEventListener('click', () => {
-                        try {
-                            this.ui.showGlossaryModal(false);
-                        } catch (error) {
-                            console.error('Close glossary modal error:', error);
-                        }
-                    });
-                    this.dom.addGlossaryTermBtn.addEventListener('click', (e) => {
-                        try {
-                            this.glossary.add.bind(this.glossary)();
-                        } catch (error) {
-                            console.error('Add glossary term error:', error);
-                            TranslatorApp.ui.showAlert('فشل في إضافة المصطلح.', 'error');
-                        }
-                    });
-                    this.dom.exportGlossaryBtn.addEventListener('click', (e) => {
-                        try {
-                            this.glossary.export.bind(this.glossary)();
-                        } catch (error) {
-                            console.error('Export glossary error:', error);
-                            TranslatorApp.ui.showAlert('فشل في تصدير القاموس.', 'error');
-                        }
-                    });
-                    this.dom.importGlossaryBtn.addEventListener('click', () => {
-                        try {
-                            this.dom.glossaryFileInput.click();
-                        } catch (error) {
-                            console.error('Import glossary error:', error);
-                        }
-                    });
-                    this.dom.glossaryFileInput.addEventListener('change', (e) => {
-                        try {
-                            this.glossary.import(e.target.files[0]);
-                        } catch (error) {
-                            console.error('Import glossary file error:', error);
-                            TranslatorApp.ui.showAlert('فشل في استيراد القاموس.', 'error');
-                        }
-                    });
-                    this.dom.glossarySearch.addEventListener('input', (e) => {
-                        try {
-                            this.glossary.filter(e.target.value);
-                        } catch (error) {
-                            console.error('Glossary search error:', error);
-                        }
-                    });
-
-                    // Add event listener for glossary category if it exists
-                    if (this.dom.glossaryCategory) {
-                        this.dom.glossaryCategory.addEventListener('change', (e) => {
-                            try {
-                                this.state.hasUnsavedChanges = true;
-                            } catch (error) {
-                                console.error('Glossary category change error:', error);
-                            }
-                        });
-                    }
 
                     this.dom.manageIdsBtn.addEventListener('click', () => {
                         try {
@@ -2028,24 +2285,132 @@
                 }
             },
 
+            translationMemory: {
+                storage: new Map(),
+                maxEntries: 10000, // Maximum number of translations to store
+                
+                init() {
+                    this.load();
+                    // Update UI after a short delay to ensure DOM is ready
+                    setTimeout(() => this.updateUI(), 100);
+                },
+                
+                load() {
+                    try {
+                        const saved = localStorage.getItem('translationMemoryCache');
+                        if (saved) {
+                            const data = JSON.parse(saved);
+                            this.storage = new Map(data);
+                            console.log(`TM loaded: ${this.storage.size} entries`);
+                        }
+                    } catch (error) {
+                        console.warn('Failed to load TM:', error);
+                        this.storage = new Map();
+                    }
+                },
+                
+                save() {
+                    try {
+                        // Convert Map to array for JSON serialization
+                        const data = Array.from(this.storage.entries());
+                        
+                        // If too many entries, keep only the most recent ones
+                        if (data.length > this.maxEntries) {
+                            const trimmed = data.slice(-this.maxEntries);
+                            this.storage = new Map(trimmed);
+                        }
+                        
+                        localStorage.setItem('translationMemoryCache', JSON.stringify(Array.from(this.storage.entries())));
+                        console.log(`TM saved: ${this.storage.size} entries`);
+                    } catch (error) {
+                        console.warn('Failed to save TM:', error);
+                    }
+                },
+                
+                get(originalText) {
+                    if (!TranslatorApp.dom.useTmCheckbox.checked) return null;
+                    const key = this.createKey(originalText);
+                    return this.storage.get(key) || null;
+                },
+                
+                set(originalText, translatedText) {
+                    if (!TranslatorApp.dom.useTmCheckbox.checked) return;
+                    const key = this.createKey(originalText);
+                    this.storage.set(key, {
+                        translation: translatedText,
+                        timestamp: Date.now(),
+                        subject: TranslatorApp.state.selectedSubject,
+                        grade: TranslatorApp.state.selectedGrade
+                    });
+                },
+                
+                createKey(text) {
+                    // Normalize text for consistent matching
+                    return (text || '').trim().toLowerCase();
+                },
+                
+                clear() {
+                    this.storage.clear();
+                    localStorage.removeItem('translationMemoryCache');
+                    console.log('TM cleared');
+                },
+                
+                getStats() {
+                    return {
+                        totalEntries: this.storage.size,
+                        maxEntries: this.maxEntries,
+                        enabled: TranslatorApp.dom.useTmCheckbox.checked
+                    };
+                },
+                
+                updateUI() {
+                    try {
+                        const stats = this.getStats();
+                        if (TranslatorApp.dom.tmStats) {
+                            const statusText = stats.enabled ? '✓ مفعّل' : '✗ معطّل';
+                            TranslatorApp.dom.tmStats.textContent = `${statusText} | عدد الترجمات المحفوظة: ${stats.totalEntries.toLocaleString('ar-EG')} / ${stats.maxEntries.toLocaleString('ar-EG')}`;
+                        }
+                    } catch (error) {
+                        console.warn('TM UI update error:', error);
+                    }
+                }
+            },
+
             remoteGlossary: {
                 map: {},
-                async fetchApproved(subject, texts) {
+                async fetchApproved(subject, grade, texts) {
                     this.map = {};
                     if (!subject || subject === 'None') return this.map;
+                    
                     try {
-                        const tq = `select A,B where C = '${(subject || '').replace(/'/g, "\\'")}'`;
-                        const url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=termbase&tqx=out:json&headers=1&tq=${encodeURIComponent(tq)}`;
-                        const res = await fetch(url, { cache: 'no-cache' });
+                        // Extract grid number from grade (e.g., "Grade 5" -> "5")
+                        const gradeNumber = grade.replace(/[^0-9]/g, '');
+                        
+                        console.log(`Fetching termbase for Subject: ${subject}, Grade: ${gradeNumber}`);
+                        
+                        // Query based on new structure: Subject (Column A), grid (Column B), English Term (Column D), Arabic Term (Column E)
+                        // Filter by Subject and grid
+                        let tq = `select D,E where A = '${(subject || '').replace(/'/g, "\\'")}' and B = '${gradeNumber}'`;
+                        let url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:json&headers=1&tq=${encodeURIComponent(tq)}`;
+                        
+                        let res = await fetch(url, { cache: 'no-cache' });
+                        
+                        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                        
                         const raw = await res.text();
                         const match = raw.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\);/);
                         if (!match) throw new Error('تعذّر قراءة استجابة gviz.');
+                        
                         const data = JSON.parse(match[1]);
                         const rows = data.table?.rows || [];
+                        
+                        // Column D (index 0) = English Term, Column E (index 1) = Arabic Term
                         const allPairs = rows.map(r => ({
                             term: (r.c?.[0]?.v || '').toString().trim(),
                             translation: (r.c?.[1]?.v || '').toString().trim()
                         })).filter(x => x.term && x.translation);
+
+                        console.log(`Fetched ${allPairs.length} terms for ${subject} - Grade ${gradeNumber}`);
 
                         const loweredTexts = Array.isArray(texts) ? texts.map(t => (t || '').toString().toLowerCase()) : [];
                         const map = {};
@@ -2058,6 +2423,8 @@
                             allPairs.forEach(({ term, translation }) => { map[term] = translation; });
                         }
                         this.map = map;
+                        
+                        console.log(`Applied ${Object.keys(map).length} terms from termbase`);
                         return this.map;
                     } catch (e) {
                         console.warn('GVIZ fetch failed:', e);
@@ -2117,13 +2484,24 @@
                         return '';
                     }
                 },
+                escapeHtml(text) {
+                    if (typeof text !== 'string') return text;
+                    const map = {
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#039;'
+                    };
+                    return text.replace(/[&<>"']/g, m => map[m]);
+                },
                 sanitize(html) {
                     if (typeof html !== 'string') return html;
                     try {
                         if (window.DOMPurify) {
                             return DOMPurify.sanitize(html, {
                                 ALLOWED_TAGS: ['b', 'i', 'u', 'em', 'strong', 'sub', 'sup', 'br', 'span', 'p', 'ul', 'ol', 'li', 'img', 'a', 'code', 'pre', 'table', 'tr', 'td', 'th', 'thead', 'tbody', 'math', 'div', 'math-field', 'audio'],
-                                ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style', 'dir', 'value', 'default-mode', 'data-path', 'data-file-index', 'data-blank', 'read-only', 'controls', 'virtual-keyboard-mode', 'use-shared-virtual-keyboard', 'data-node-type', 'data-node-variation']
+                                ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style', 'dir', 'value', 'default-mode', 'data-path', 'data-file-index', 'data-blank', 'read-only', 'controls', 'virtual-keyboard-mode', 'use-shared-virtual-keyboard', 'data-node-type', 'data-node-variation', 'locale', 'data-question-id', 'data-part-index', 'data-field-type', 'data-choice-index', 'data-math-index', 'white-space']
                             });
                         }
                         // Fallback sanitization
@@ -2154,7 +2532,7 @@
                     'h': 'س'
                 },
                 wantsArabicIndicDigits(subject, grade) {
-                    if (subject === 'Mathematics' && ['Grades 1–3', 'Grades 8–12'].includes(grade)) return true;
+                    if (subject === 'Mathematics' && ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].includes(grade)) return true;
                     if (subject === 'Science' && grade === 'Grade 9') return true;
                     return false;
                 },
@@ -2295,6 +2673,7 @@
                             selectedFilesInfo: TranslatorApp.state.selectedFilesInfo,
                             originalJsonData: TranslatorApp.state.originalJsonData,
                             translatedJsonData: TranslatorApp.state.translatedJsonData,
+                            initialTranslatedJsonData: TranslatorApp.state.initialTranslatedJsonData,
                             glossary: TranslatorApp.state.glossary,
                             activeScreen: TranslatorApp.state.activeScreen,
                             mappedIds: TranslatorApp.dom.mappedIdsInput.value,
@@ -2369,6 +2748,7 @@
                         TranslatorApp.state.selectedFilesInfo = s.selectedFilesInfo || [];
                         TranslatorApp.state.originalJsonData = s.originalJsonData || [];
                         TranslatorApp.state.translatedJsonData = s.translatedJsonData || [];
+                        TranslatorApp.state.initialTranslatedJsonData = s.initialTranslatedJsonData || [];
                         TranslatorApp.state.glossary = s.glossary || [];
                         TranslatorApp.state.activeScreen = s.activeScreen || 'setup';
                         TranslatorApp.dom.mappedIdsInput.value = s.mappedIds || '[]';
@@ -2384,7 +2764,6 @@
                         }
 
                         TranslatorApp.ui.renderFileList();
-                        TranslatorApp.glossary.render();
                         TranslatorApp.subjects.updateUI();
 
                         if (TranslatorApp.state.activeScreen === 'preview' && TranslatorApp.state.translatedJsonData.length > 0) {
@@ -2605,96 +2984,34 @@
                 }
             },
 
-            glossary: {
-                add() {
-                    const term = TranslatorApp.dom.glossaryTermInput.value.trim();
-                    const translation = TranslatorApp.dom.glossaryTranslationInput.value.trim();
-                    if (!term || !translation) return TranslatorApp.ui.showAlert('يرجى إدخال المصطلح وترجمته.', 'error');
-                    if (TranslatorApp.state.glossary.some(e => e.term.toLowerCase() === term.toLowerCase())) return TranslatorApp.ui.showAlert('المصطلح موجود بالفعل.', 'error');
-                    TranslatorApp.state.glossary.push({ term, translation, category: TranslatorApp.dom.glossaryCategory.value, dateAdded: new Date().toISOString() });
-                    TranslatorApp.dom.glossaryTermInput.value = '';
-                    TranslatorApp.dom.glossaryTranslationInput.value = '';
-                    this.render();
-                    TranslatorApp.state.hasUnsavedChanges = true;
-                },
-                delete(index) { TranslatorApp.state.glossary.splice(index, 1); this.render(); TranslatorApp.state.hasUnsavedChanges = true; },
-                render(filteredList = null) { const list = filteredList || TranslatorApp.state.glossary; TranslatorApp.ui.renderGlossaryList(list); },
-                filter(searchTerm) {
-                    const term = searchTerm.toLowerCase();
-                    const filtered = TranslatorApp.state.glossary.filter(entry => entry.term.toLowerCase().includes(term) || entry.translation.toLowerCase().includes(term));
-                    this.render(filtered);
-                },
-                export() {
-                    if (TranslatorApp.state.glossary.length === 0) return TranslatorApp.ui.showAlert('القاموس فارغ.', 'error');
-                    const escapeCSV = (str) => `"${(str || '').toString().replace(/"/g, '""')}"`;
-                    let csvContent = '\uFEFF"term","translation"\r\n';
-                    TranslatorApp.state.glossary.forEach(entry => { csvContent += `${escapeCSV(entry.term)},${escapeCSV(entry.translation)}\r\n`; });
-                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href = url; a.download = 'translator_glossary.csv';
-                    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-                    TranslatorApp.ui.showAlert('تم تصدير القاموس بنجاح.', 'success');
-                },
-                async import(file) {
-                    if (!file) return;
-                    try {
-                        const text = await file.text();
-                        let imported = [];
-                        const normalizeHeader = (h) => (h || '').toString().trim().replace(/^"|"$/g, '').toLowerCase();
-                        const parseCsvLine = (line) => { const out = [], re = /("([^"]|"")*"|[^,]*)(,|$)/g; let m; while ((m = re.exec(line)) !== null) { let cell = (m[1] || '').replace(/^"|"$/g, '').replace(/""/g, '"'); out.push(cell); if (!m[3]) break; } return out; };
-                        const isCsv = file.name.toLowerCase().endsWith('.csv') || /,/.test(text.split(/\r?\n/)[0] || '');
-                        if (isCsv) {
-                            const lines = text.split(/\r?\n/).filter(l => l.trim()); if (lines.length < 2) throw new Error('CSV فارغ.');
-                            const headerCells = parseCsvLine(lines[0]).map(normalizeHeader);
-                            const termIdx = headerCells.findIndex(h => ['term', 'source term', 'مصطلح'].includes(h));
-                            const transIdx = headerCells.findIndex(h => ['translation', 'translated term', 'ترجمة'].includes(h));
-                            if (termIdx === -1 || transIdx === -1) throw new Error('CSV يجب أن يحتوي أعمدة term و translation.');
-                            imported = lines.slice(1).map(line => {
-                                const cells = parseCsvLine(line);
-                                const term = (cells[termIdx] || '').trim();
-                                const translation = (cells[transIdx] || '').trim();
-                                return { term, translation };
-                            }).filter(r => r.term && r.translation);
-                        } else {
-                            const raw = JSON.parse(text);
-                            if (!Array.isArray(raw)) throw new Error('JSON غير صالح.');
-                            imported = raw.map(row => {
-                                const term = (row.term || row['source term'] || row['مصطلح'] || '').toString().trim();
-                                const translation = (row.translation || row['translated term'] || row['ترجمة'] || '').toString().trim();
-                                return { term, translation };
-                            }).filter(r => r.term && r.translation);
-                        }
-                        const newEntries = imported.filter(newEntry => !TranslatorApp.state.glossary.some(existing => existing.term.toLowerCase().trim() === newEntry.term.toLowerCase().trim()))
-                            .map(e => ({ term: e.term, translation: e.translation, category: 'general', dateAdded: new Date().toISOString() }));
-                        TranslatorApp.state.glossary = [...TranslatorApp.state.glossary, ...newEntries];
-                        this.render();
-                        TranslatorApp.state.hasUnsavedChanges = true;
-                        TranslatorApp.ui.showAlert(`تم استيراد ${newEntries.length} مصطلح.`, 'success');
-                    } catch (e) {
-                        console.error(e);
-                        TranslatorApp.ui.showAlert('فشل استيراد القاموس.', 'error');
-                    } finally { TranslatorApp.dom.glossaryFileInput.value = ''; }
-                }
-            },
-
             subjects: {
                 data: {
                     'None': { grades: ['None'], prompt: 'Translate to Arabic accurately. Preserve HTML/LaTeX and special placeholders (e.g., __LOCK_0__, __GLOSSARY_0__). If a text contains the separator \\n<SEP>\\n, translate each segment separately and preserve the separator exactly.' },
                     'Mathematics': {
-                        grades: ['Grades 1–3', 'Grades 4–8', 'Grades 9–12'], prompts: {
-                            'Grades 1–3': 'Task: Translate English Math questions for grades 1-3 into accurate, age-appropriate Arabic.\nRules:\n1) Use official MoE phrasing.\n2) Use Arabic-Indic numerals.\n3) Write equations in LaTeX. Transliterate variables to Arabic (س، ص، ع).\n4) Fractions as \\dfrac{البسط}{المقام}.\n5) If text contains \\n<SEP>\\n, translate each part and preserve separator.',
-                            'Grades 4–8': 'Task: Translate English Math questions for grades 4-8 into accurate Arabic.\nRules:\n1) Use official MoE phrasing.\n2) Use English numerals.\n3) Translate units to Arabic abbreviations (cm→سم).\n4) Fractions as \\dfrac{numerator}{denominator}.\n5) If text contains \\n<SEP>\\n, translate each part and preserve separator.',
-                            'Grades 9–12': 'Task: Translate English Math questions for grades 9-12 into accurate Arabic.\nRules:\n1) Use official MoE phrasing.\n2) Use Arabic-Indic numerals; transliterate variables to Arabic.\n3) Fractions as \\dfrac{البسط}{المقام}.\n4) If text contains \\n<SEP>\\n, translate each part and preserve separator.'
+                        grades: ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'], 
+                        prompts: {
+                            'Grade 1': 'ترجمة أسئلة الرياضيات للصف الأول.\nالقواعد:\n1) استخدم الأرقام العربية الهندية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية البسيطة.\n4) استخدم مصطلحات مناسبة للعمر.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 2': 'ترجمة أسئلة الرياضيات للصف الثاني.\nالقواعد:\n1) استخدم الأرقام العربية الهندية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية البسيطة.\n4) استخدم مصطلحات مناسبة للعمر.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 3': 'ترجمة أسئلة الرياضيات للصف الثالث.\nالقواعد:\n1) استخدم الأرقام العربية الهندية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية البسيطة.\n4) استخدم مصطلحات مناسبة للعمر.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 4': 'ترجمة أسئلة الرياضيات للصف الرابع.\nالقواعد:\n1) استخدم الأرقام الإنجليزية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية.\n4) استخدم مصطلحات مناسبة للمرحلة.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 5': 'ترجمة أسئلة الرياضيات للصف الخامس.\nالقواعد:\n1) استخدم الأرقام الإنجليزية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية.\n4) استخدم مصطلحات مناسبة للمرحلة.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 6': 'ترجمة أسئلة الرياضيات للصف السادس.\nالقواعد:\n1) استخدم الأرقام الإنجليزية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية.\n4) استخدم مصطلحات مناسبة للمرحلة.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 7': 'ترجمة أسئلة الرياضيات للصف السابع.\nالقواعد:\n1) استخدم الأرقام الإنجليزية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية.\n4) استخدم مصطلحات مناسبة للمرحلة.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 8': 'ترجمة أسئلة الرياضيات للصف الثامن.\nالقواعد:\n1) استخدم الأرقام الإنجليزية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية.\n4) استخدم مصطلحات مناسبة للمرحلة.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 9': 'ترجمة أسئلة الرياضيات للصف التاسع.\nالقواعد:\n1) استخدم الأرقام العربية الهندية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية.\n4) استخدم مصطلحات مناسبة للمرحلة.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 10': 'ترجمة أسئلة الرياضيات للصف العاشر.\nالقواعد:\n1) استخدم الأرقام العربية الهندية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية.\n4) استخدم مصطلحات مناسبة للمرحلة.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 11': 'ترجمة أسئلة الرياضيات للصف الحادي عشر.\nالقواعد:\n1) استخدم الأرقام العربية الهندية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية.\n4) استخدم مصطلحات مناسبة للمرحلة.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 12': 'ترجمة أسئلة الرياضيات للصف الثاني عشر.\nالقواعد:\n1) استخدم الأرقام العربية الهندية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الرياضية.\n4) استخدم مصطلحات مناسبة للمرحلة.\n5) احتفظ بـ \\n<SEP>\\n.'
                         }
                     },
                     'Physics': {
                         grades: ['Grades 10–12'], prompts: {
-                            'Grades 10–12': 'Translate Physics questions.\nRules:\n1) Use official MoE phrasing.\n2) Use English numerals.\n3) Keep physical formulas (e.g., F=ma), variables, and units (cm, m, kg) in their original LTR format. Wrap formulas in `<span dir="ltr"></span>`.\n4) Keep subscripts and variables exact.\n5) If text contains \\n<SEP>\\n, translate parts separately and preserve separator.'
+                            'Grades 10–12': 'Translate Physics questions.\nRules:\n1) Use official MoE phrasing.\n2) Use English numerals.\n3) Keep physical formulas (e.g., F=ma), variables, and units (cm, m, kg) in their original LTR format. Do NOT wrap them in any HTML tags.\n4) Keep subscripts and variables exact.\n5) If text contains \\n<SEP>\\n, translate parts separately and preserve separator.'
                         }
                     },
                     'Chemistry': {
                         grades: ['Grades 10–12'], prompts: {
-                            'Grades 10–12': 'Translate Chemistry questions.\nRules:\n1) Use English numerals.\n2) Keep chemical formulas, symbols, and equations in their original LTR format. Wrap them in `<span dir="ltr"></span>` to ensure correct directionality.\n3) Keep units in English abbreviations.\n4) If text contains \\n<SEP>\\n, preserve separator.'
+                            'Grades 10–12': 'Translate Chemistry questions.\nRules:\n1) Use English numerals.\n2) Keep chemical formulas, symbols, and equations in their original LTR format. Do NOT wrap them in any HTML tags.\n3) Keep units in English abbreviations.\n4) If text contains \\n<SEP>\\n, preserve separator.'
                         }
                     },
                     'Biology': {
@@ -2703,9 +3020,14 @@
                         }
                     },
                     'Science': {
-                        grades: ['Grades 4–8', 'Grade 9'], prompts: {
-                            'Grades 4–8': 'Translate Science (4–8).\nUse English numerals; Arabic labels; chemical symbols in English; preserve \\n<SEP>\\n.',
-                            'Grade 9': 'Translate Science (9).\nUse Arabic-Indic numerals; Arabic labels; preserve \\n<SEP>\\n.'
+                        grades: ['Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9'], 
+                        prompts: {
+                            'Grade 4': 'ترجمة أسئلة العلوم للصف الرابع.\nالقواعد:\n1) استخدم الأرقام الإنجليزية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الكيميائية بالإنجليزية.\n4) استخدم مصطلحات مناسبة للعمر.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 5': 'ترجمة أسئلة العلوم للصف الخامس.\nالقواعد:\n1) استخدم الأرقام الإنجليزية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الكيميائية بالإنجليزية.\n4) استخدم مصطلحات مناسبة للعمر.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 6': 'ترجمة أسئلة العلوم للصف السادس.\nالقواعد:\n1) استخدم الأرقام الإنجليزية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الكيميائية بالإنجليزية.\n4) استخدم مصطلحات مناسبة للعمر.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 7': 'ترجمة أسئلة العلوم للصف السابع.\nالقواعد:\n1) استخدم الأرقام الإنجليزية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الكيميائية بالإنجليزية.\n4) استخدم مصطلحات مناسبة للعمر.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 8': 'ترجمة أسئلة العلوم للصف الثامن.\nالقواعد:\n1) استخدم الأرقام الإنجليزية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الكيميائية بالإنجليزية.\n4) استخدم مصطلحات مناسبة للعمر.\n5) احتفظ بـ \\n<SEP>\\n.',
+                            'Grade 9': 'ترجمة أسئلة العلوم للصف التاسع.\nالقواعد:\n1) استخدم الأرقام العربية الهندية.\n2) استخدم التسميات العربية (أ، ب، ج).\n3) احتفظ بالرموز الكيميائية بالإنجليزية.\n4) استخدم مصطلحات مناسبة للعمر.\n5) احتفظ بـ \\n<SEP>\\n.'
                         }
                     },
                     'Integrated Science': {
@@ -2752,31 +3074,55 @@
                 },
                 buildSystemPrompt() {
                     const base = this.getCurrentPrompt();
-                    const subject = TranslatorApp.dom.subjectSelect.value;
-                    const grade = TranslatorApp.dom.gradeSelect.value;
+                    const subject = TranslatorApp.dom.subjectSelect.value;
+                    const grade = TranslatorApp.dom.gradeSelect.value;
+                    
+                    // Add subject and grade info to the prompt
+                    const subjectInfo = subject !== 'None' && grade !== 'None' 
+                        ? `\n\n--- معلومات المادة والجريد ---\nالمادة: ${subject}\nالجريد: ${grade}\n--- نهاية المعلومات ---\n\n`
+                        : '';
                     const wantArabic = TranslatorApp.quality.wantsArabicIndicDigits(subject, grade);
                     const digitsRule = wantArabic ? 'Use Arabic-Indic numerals (٠١٢٣٤٥٦٧٨٩).' : 'Use English numerals (0123456789).';
-                    const core = [
+                    const core = [
                         // Move the critical rule to the top for emphasis
-                        '**CRITICAL: Do NOT output any LaTeX commands for Arabic text. For example, the word "طالب" should be rendered exactly as "طالب" and NOT as "\\alt{\\ta}\\prime \\alt{\\alef}\\prime \\alt{\\la}\\prime \\alt{\\ba}\\prime".**',
-                        'Core rules:',
-                        '- Do NOT add or remove content.',
-                        '- Translate text content inside of HTML tags. Preserve the HTML tags themselves (e.g., <table>, <b>, <img>) and all LaTeX markup exactly as-is.',
-                        '- If a text segment contains no translatable prose (e.g., it is only a table of numbers, a chemical formula, or a URL), you MUST return the original text segment completely unchanged.',
-                        '- If present, keep placeholders __LOCK_n__ and __GLOSSARY_n__ unchanged.',
-                        `- ${digitsRule}`,
-                        `- If text contains the separator ${TranslatorApp.constants.CONTEXT_SEPARATOR}, translate each segment and preserve the separator exactly.`,
-                        '- Keep the order of choices unchanged.',
-                        '- Output in Arabic (MSA), formal tone.'
+                        '**CRITICAL: Do NOT output any LaTeX commands for Arabic text. For example, the word "طالب" should be rendered exactly as "طالب" and NOT as "\\alt{\\ta}\\prime \\alt{\\alef}\\prime \\alt{\\la}\\prime \\alt{\\ba}\\prime".**',
+                        '',
+                        '**CRITICAL RULES FOR HTML TAGS:**',
+                        '1. NEVER add any HTML tags (including <span>, <div>, <p>, etc.) to the translation.',
+                        '2. NEVER wrap variables, units, or formulas in <span dir="ltr"> or any other HTML tags.',
+                        '3. Keep all text content plain text without any HTML markup.',
+                        '4. If you see <math-field> in the original, keep it exactly as-is with its LaTeX value.',
+                        '5. DO NOT add irrelevant LaTeX inside math-field values.',
+                        '6. DO NOT add English punctuation marks (?, !, .) inside <math-field> tags unless they are part of the original mathematical expression.',
+                        '',
+                        'Core rules:',
+                        '- Do NOT add or remove content.',
+                        '- Translate text content inside of HTML tags. Preserve the HTML tags themselves (e.g., <table>, <b>, <img>) and all LaTeX markup exactly as-is.',
+                        '- If a text segment contains no translatable prose (e.g., it is only a table of numbers, a chemical formula, or a URL), you MUST return the original text segment completely unchanged.',
+                        '- If present, keep placeholders __LOCK_n__ and __GLOSSARY_n__ unchanged.',
+                        `- ${digitsRule}`,
+                        `- If text contains the separator ${TranslatorApp.constants.CONTEXT_SEPARATOR}, translate each segment and preserve the separator exactly.`,
+                        '- Keep the order of choices unchanged.',
+                        '- Output in Arabic (MSA), formal tone.'
                     ].join('\n');
-                    return `${base}\n\n${core}`;
+                    return `${subjectInfo}${base}\n\n${core}`;
                 },
                 async apply() {
                     TranslatorApp.state.selectedSubject = TranslatorApp.dom.subjectSelect.value;
                     TranslatorApp.state.selectedGrade = TranslatorApp.dom.gradeSelect.value;
                     TranslatorApp.state.hasUnsavedChanges = true;
                     TranslatorApp.ui.showSubjectsModal(false);
-                    TranslatorApp.ui.showAlert(`تم تطبيق: ${TranslatorApp.state.selectedSubject} - ${TranslatorApp.state.selectedGrade}`, 'success');
+                    
+                    // Show detailed success message
+                    const subjectName = TranslatorApp.state.selectedSubject;
+                    const gradeName = TranslatorApp.state.selectedGrade;
+                    let message = `تم تطبيق: ${subjectName} - ${gradeName}`;
+                    
+                    if (subjectName !== 'None' && gradeName !== 'None') {
+                        message += `\nسيتم جلب المصطلحات المخصصة لهذا الجريد عند الترجمة.`;
+                    }
+                    
+                    TranslatorApp.ui.showAlert(message, 'success', 5000);
                 },
                 updateUI() {
                     TranslatorApp.dom.subjectSelect.value = TranslatorApp.state.selectedSubject;
@@ -2817,6 +3163,11 @@
                             // Use the REAL original text as the key for the cache
                             const cacheKey = job.realOriginalText || job.originalText;
                             TranslatorApp.state.translationCache.set(cacheKey, translatedText);
+                            
+                            // Save to Translation Memory
+                            if (TranslatorApp.dom.useTmCheckbox.checked) {
+                                TranslatorApp.translationMemory.set(cacheKey, translatedText);
+                            }
                         });
                         done += items.length;
                     }
@@ -2884,7 +3235,7 @@
                 },
 
                 async withGeminiJSON(systemPrompt, userInstruction, payload, apiKey, signal) {
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
                     const fullPrompt = `${systemPrompt || ''}\n\n${userInstruction}\n\nPayload:\n${JSON.stringify(payload)}`;
                     const response = await fetch(apiUrl, {
                         method: 'POST',
@@ -2931,7 +3282,7 @@
                     return data.response || '';
                 },
                 async withGeminiText(systemPrompt, userPrompt, apiKey, signal) {
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
                     const fullPrompt = systemPrompt ? `${systemPrompt}\n\n---\n\n${userPrompt}` : userPrompt;
                     const response = await fetch(apiUrl, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
@@ -3086,6 +3437,7 @@
                     this.ui.updateProgress('جاري قراءة الملفات...');
                     await this.fileHandler.readFilesFromInput();
                     this.state.translatedJsonData = JSON.parse(JSON.stringify(this.state.originalJsonData));
+                    this.state.initialTranslatedJsonData = [];
             
                     const allJobs = [];
                     const parsedDataMap = new Map();
@@ -3125,7 +3477,10 @@
                                     // Special case for a more complex object answer type
                                     processField(originalPart.answer.key, { fileIndex, partIndex, key: 'answer', subKey: 'key' });
                                     processField(originalPart.answer.value, { fileIndex, partIndex, key: 'answer', subKey: 'value' });
-                                    processField(originalPart.answer.unit, { fileIndex, partIndex, key: 'answer', subKey: 'unit' });
+                                    // Translate unit directly using unitsMap instead of sending to AI
+                                    const originalUnit = originalPart.answer.unit || '';
+                                    const translatedUnit = TranslatorApp.quality.unitsMap[originalUnit.toLowerCase()] || originalUnit;
+                                    this.state.translatedJsonData[fileIndex].data.parts[partIndex].answer.unit = translatedUnit;
                                 }
                             }
                             
@@ -3152,21 +3507,47 @@
                         }
                     }
                     
+                    // Check Translation Memory first
+                    let tmHits = 0;
+                    let jobsToTranslate = [];
+                    
+                    if (this.dom.useTmCheckbox.checked) {
+                        this.ui.updateProgress('جاري فحص ذاكرة الترجمة...');
+                        uniqueJobs.forEach(job => {
+                            const tmEntry = this.translationMemory.get(job.originalText);
+                            if (tmEntry && tmEntry.translation) {
+                                // Use cached translation
+                                this.state.translationCache.set(job.originalText, tmEntry.translation);
+                                tmHits++;
+                            } else {
+                                // Need to translate this
+                                jobsToTranslate.push(job);
+                            }
+                        });
+                        
+                        if (tmHits > 0) {
+                            console.log(`TM hits: ${tmHits}/${uniqueJobs.length}`);
+                            this.ui.updateProgress(`تم استرجاع ${tmHits} ترجمة من الذاكرة...`);
+                        }
+                    } else {
+                        jobsToTranslate = uniqueJobs;
+                    }
+                    
                     this.ui.updateProgress('جاري جلب المصطلحات المعتمدة...');
-                    const allTextsForGlossary = uniqueJobs.map(j => j.originalText);
-                    await this.remoteGlossary.fetchApproved(this.state.selectedSubject, allTextsForGlossary);
+                    const allTextsForGlossary = jobsToTranslate.map(j => j.originalText);
+                    await this.remoteGlossary.fetchApproved(this.state.selectedSubject, this.state.selectedGrade, allTextsForGlossary);
             
-                    uniqueJobs.forEach(job => {
+                    jobsToTranslate.forEach(job => {
                         const { modifiedText, placeholders } = this.remoteGlossary.applyWithPlaceholders(job.originalText);
                         job.realOriginalText = job.originalText;
                         job.originalText = modifiedText;
                         job.placeholders = placeholders;
                     });
             
-                    if (uniqueJobs.length > 0) {
-                        this.ui.updateProgress(`جاري ترجمة ${uniqueJobs.length} نص فريد...`);
+                    if (jobsToTranslate.length > 0) {
+                        this.ui.updateProgress(`جاري ترجمة ${jobsToTranslate.length} نص جديد...`);
                         const systemPrompt = this.subjects.buildSystemPrompt();
-                        await this.api.translateInChunks(uniqueJobs, apiKeyOrUrl, apiProvider, localModelName, systemPrompt);
+                        await this.api.translateInChunks(jobsToTranslate, apiKeyOrUrl, apiProvider, localModelName, systemPrompt);
                     }
             
                     this.ui.updateProgress('جاري إعادة بناء المحتوى المترجم...');
@@ -3215,13 +3596,28 @@
                     }
             
                     this.state.activeScreen = 'preview';
+                    // Save initial translation for diff comparison
+                    this.state.initialTranslatedJsonData = JSON.parse(JSON.stringify(this.state.translatedJsonData));
                     this.history.push(this.state.translatedJsonData);
+                    
+                    // Save Translation Memory to localStorage
+                    if (this.dom.useTmCheckbox.checked) {
+                        this.translationMemory.save();
+                        this.translationMemory.updateUI();
+                    }
+                    
                     this.session.save();
                     this.ui.showScreen('preview');
                     this.preview.render();
                     const stats = this.statistics.calculate();
                     this.ui.renderStatistics(stats);
-                    this.ui.showAlert('تمت الترجمة بنجاح', 'success');
+                    
+                    // Show success message with TM stats
+                    let successMessage = 'تمت الترجمة بنجاح';
+                    if (this.dom.useTmCheckbox.checked && tmHits > 0) {
+                        successMessage += ` (تم استخدام ${tmHits} ترجمة محفوظة)`;
+                    }
+                    this.ui.showAlert(successMessage, 'success');
             
                 } catch (error) {
                     if (error?.name !== 'AbortError') {
@@ -3396,46 +3792,6 @@
                         console.error('Show modal error:', error);
                     }
                 },
-                renderGlossaryList(list) {
-                    try {
-                        const c = TranslatorApp.dom.glossaryListContainer;
-                        c.innerHTML = '';
-                        if (list.length === 0) {
-                            c.innerHTML = `<p class="text-center" style="color: var(--secondary-text)">لا توجد مصطلحات.</p>`;
-                            return;
-                        }
-                        const ul = document.createElement('ul');
-                        ul.className = 'space-y-2';
-                        list.forEach((entry) => {
-                            const li = document.createElement('li');
-                            li.className = 'flex justify-between items-center p-2 rounded-md border';
-                            li.style.backgroundColor = 'var(--card-bg)';
-                            li.style.borderColor = 'var(--card-border)';
-                            const originalIndex = TranslatorApp.state.glossary.findIndex(g => g.term === entry.term);
-                            li.innerHTML = `
-                    <div>
-                            <span class="font-semibold">${TranslatorApp.security.sanitize(entry.term)}</span>
-                        <span class="mx-2" style="color: var(--secondary-text)">→</span>
-                            <span>${TranslatorApp.security.sanitize(entry.translation)}</span>
-                        <span class="text-xs mr-2 px-2 py-1 rounded-full" style="background-color: var(--bg-color);">${entry.category || 'عام'}</span>
-                    </div>
-                    <button data-index="${originalIndex}" class="remove-glossary-btn text-red-500 hover:text-red-700 font-bold" aria-label="حذف">&times;</button>`;
-                            ul.appendChild(li);
-                        });
-                        c.appendChild(ul);
-                        c.querySelectorAll('.remove-glossary-btn').forEach(btn => btn.onclick = (e) => {
-                            try {
-                                TranslatorApp.glossary.delete(parseInt(btn.dataset.index));
-                            } catch (error) {
-                                console.error('Remove glossary term error:', error);
-                                TranslatorApp.ui.showAlert('فشل في حذف المصطلح.', 'error');
-                            }
-                        });
-                    } catch (error) {
-                        console.error('Render glossary list error:', error);
-                        TranslatorApp.ui.showAlert('فشل في عرض قائمة المصطلحات.', 'error');
-                    }
-                },
                 renderStatistics(stats) {
                     try {
                         const { statsContainer } = TranslatorApp.dom;
@@ -3493,6 +3849,221 @@
             preview: {
                 dmp: new diff_match_patch(),
 
+                processBlankTags(htmlString) {
+                    try {
+                        if (!htmlString || typeof htmlString !== 'string') return htmlString;
+                        
+                        let processed = htmlString;
+                        
+                        // Handle data-node-type="blank-line" tags (like in the JSON file)
+                        processed = processed.replace(
+                            /<span\s+data-node-type=["']blank-line["'][^>]*>(.*?)<\/span>/gi,
+                            (match, content) => {
+                                // Convert &nbsp; to actual space and create a blank slot
+                                const blankContent = content.replace(/&nbsp;/g, ' ').trim() || '___';
+                                // Escape quotes in data-blank attribute
+                                const escapedBlank = blankContent.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                                return `<span class="blank-slot rtl-auto" data-blank="${escapedBlank}" dir="rtl">${blankContent}</span>`;
+                            }
+                        );
+                        
+                        // Handle data-node-type="blank" tags
+                        processed = processed.replace(
+                            /<span\s+data-node-type=["']blank["'][^>]*>(.*?)<\/span>/gi,
+                            (match, content) => {
+                                const blankContent = content.replace(/&nbsp;/g, ' ').trim() || '___';
+                                const escapedBlank = blankContent.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                                return `<span class="blank-slot rtl-auto" data-blank="${escapedBlank}" dir="rtl">${blankContent}</span>`;
+                            }
+                        );
+                        
+                        // Handle any span with data-node-variation="space"
+                        processed = processed.replace(
+                            /<span[^>]*data-node-variation=["']space["'][^>]*>(.*?)<\/span>/gi,
+                            (match, content) => {
+                                const blankContent = content.replace(/&nbsp;/g, ' ').trim() || '___';
+                                const escapedBlank = blankContent.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                                return `<span class="blank-slot rtl-auto" data-blank="${escapedBlank}" dir="rtl">${blankContent}</span>`;
+                            }
+                        );
+                        
+                        // Handle any other blank-related attributes
+                        processed = processed.replace(
+                            /<span[^>]*data-blank[^>]*>(.*?)<\/span>/gi,
+                            (match, content) => {
+                                const blankContent = content.replace(/&nbsp;/g, ' ').trim() || '___';
+                                const escapedBlank = blankContent.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                                return `<span class="blank-slot rtl-auto" data-blank="${escapedBlank}" dir="rtl">${blankContent}</span>`;
+                            }
+                        );
+                        
+                        return processed;
+                    } catch (error) {
+                        console.error('Process blank tags error:', error);
+                        return htmlString;
+                    }
+                },
+                
+                processMathFieldTags(htmlString) {
+                    try {
+                        if (!htmlString || typeof htmlString !== 'string') return htmlString;
+                        
+                        let processed = htmlString;
+                        
+                        // First, remove ONLY LexicalTheme__math wrapper spans
+                        // Be very specific to avoid removing other spans
+                        processed = processed.replace(
+                            /<span\s+class=["']LexicalTheme__math--inline["']\s+data-node-type=["']math["']\s+data-node-variation=["']inline["'][^>]*>(<math-field[^>]*>.*?<\/math-field>)<\/span>/gi,
+                            '$1'
+                        );
+                        
+                        // Remove ALL dir="ltr" spans FIRST - these are AI-generated and should be removed
+                        // This is the most common issue, so handle it first
+                        const beforeDirRemoval = processed;
+                        processed = processed.replace(
+                            /<span\s+dir=["']ltr["'][^>]*>([^<]*)<\/span>/gi,
+                            '$1'
+                        );
+                        
+                        // Debug: log if we removed any dir="ltr" spans
+                        if (beforeDirRemoval !== processed) {
+                            console.log('Removed dir="ltr" spans:', beforeDirRemoval, '→', processed);
+                        }
+                        
+                        // Also handle spans with dir="ltr" and other attributes
+                        processed = processed.replace(
+                            /<span[^>]*dir=["']ltr["'][^>]*>([^<]*)<\/span>/gi,
+                            '$1'
+                        );
+                        
+                        // Remove white-space: pre-wrap spans (they're just wrappers for text)
+                        processed = processed.replace(
+                            /<span[^>]*style=["'][^"']*white-space:\s*pre-wrap[^"']*["'][^>]*>([^<]+)<\/span>/gi,
+                            '$1'
+                        );
+                        
+                        // Remove LexicalTheme__paragraph wrapper
+                        processed = processed.replace(
+                            /<p\s+class=["']LexicalTheme__paragraph["'][^>]*>(.*?)<\/p>/gi,
+                            '$1'
+                        );
+                        
+                        // Fix malformed tags like "yspan>", "xspan>", "gspan>" - these are broken AI output
+                        processed = processed.replace(
+                            /(\w+)span>/gi,
+                            '$1'
+                        );
+                        
+                        // Fix any remaining broken span tags
+                        processed = processed.replace(
+                            /<span[^>]*>([^<]*)span>/gi,
+                            '$1'
+                        );
+                        
+                        // Additional fix for specific malformed patterns
+                        processed = processed.replace(
+                            /(\d+\s*\w+)span>/gi,
+                            '$1'
+                        );
+                        
+                        // Fix common malformed patterns like "8 gspan>"
+                        processed = processed.replace(
+                            /(\d+\s*[a-zA-Z]+)span>/gi,
+                            '$1'
+                        );
+                        
+                        // Fix any remaining "span>" at the end of words
+                        processed = processed.replace(
+                            /([a-zA-Z0-9]+)span>/gi,
+                            '$1'
+                        );
+                        
+                        // Remove any remaining empty or unnecessary spans
+                        processed = processed.replace(
+                            /<span[^>]*><\/span>/gi,
+                            ''
+                        );
+                        
+                        // Clean up any orphaned closing tags
+                        processed = processed.replace(
+                            /<\/span>/gi,
+                            ''
+                        );
+                        
+                        // Final cleanup: remove any remaining spans with dir="ltr" (multiple passes to be sure)
+                        processed = processed.replace(
+                            /<span[^>]*dir\s*=\s*["']ltr["'][^>]*>([^<]*)<\/span>/gi,
+                            '$1'
+                        );
+                        
+                        // Handle edge cases where quotes might be different
+                        processed = processed.replace(
+                            /<span[^>]*dir\s*=\s*['"]ltr['"][^>]*>([^<]*)<\/span>/gi,
+                            '$1'
+                        );
+                        
+                        // NUCLEAR OPTION: Remove ALL remaining spans completely (no exceptions)
+                        // This ensures absolutely NO span tags appear anywhere
+                        const beforeNuclear = processed;
+                        processed = processed.replace(
+                            /<span[^>]*>([^<]*)<\/span>/gi,
+                            '$1'
+                        );
+                        
+                        // Debug: log nuclear option results
+                        if (beforeNuclear !== processed) {
+                            console.log('NUCLEAR: Removed remaining spans:', beforeNuclear, '→', processed);
+                        }
+                        
+                        // Remove any remaining opening span tags
+                        processed = processed.replace(
+                            /<span[^>]*>/gi,
+                            ''
+                        );
+                        
+                        // Remove any remaining closing span tags
+                        processed = processed.replace(
+                            /<\/span>/gi,
+                            ''
+                        );
+                        
+                        // Handle existing math-field tags from JSON
+                        // Convert them to proper format with all necessary attributes
+                        processed = processed.replace(
+                            /<math-field([^>]*)>(.*?)<\/math-field>/gi,
+                            (match, attrs, content) => {
+                                // Extract value attribute
+                                const valueMatch = attrs.match(/value=["']([^"']*)["']/i);
+                                let value = valueMatch ? valueMatch[1] : content;
+                                
+                                // Clean up value - handle escaped characters and special cases
+                                value = value.replace(/\\displaystyle\{([^}]+)\}/g, '$1')
+                                           .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '\\frac{$1}{$2}')
+                                           .replace(/​/g, ''); // Remove zero-width spaces
+                                
+                                // Extract or set default-mode
+                                const modeMatch = attrs.match(/default-mode=["']([^"']*)["']/i);
+                                const mode = modeMatch ? modeMatch[1] : 'inline-math';
+                                
+                                // Check if read-only (from source)
+                                const isReadOnly = attrs.includes('read-only');
+                                const readOnlyAttr = isReadOnly ? 'read-only="true"' : '';
+                                
+                                // Create proper math-field with all attributes
+                                // Always force LTR for math content
+                                // Escape the value properly for HTML attribute
+                                const escapedValue = value.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                                return `<math-field default-mode="${mode}" value="${escapedValue}" ${readOnlyAttr} virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard dir="ltr" style="direction: ltr; unicode-bidi: embed;"></math-field>`;
+                            }
+                        );
+                        
+                        return processed;
+                    } catch (error) {
+                        console.error('Process math field tags error:', error);
+                        return htmlString;
+                    }
+                },
+
                 renderContentWithMath(htmlString) {
                     try {
                         if (typeof htmlString !== 'string' || !htmlString) {
@@ -3500,9 +4071,14 @@
                         }
                         const cleanedHtml = htmlString.replace(/R\s*(\d+)/g, 'والباقي $1');
 
-                        // 1. Sanitize the incoming HTML first
-                        let sanitizedHtml = TranslatorApp.security.sanitize(cleanedHtml); // use cleanedHtml here
-                        // 2. Create a temporary DOM element to parse the sanitized HTML
+                        // 1. First, handle blank tags and math-field tags before sanitization
+                        let processedHtml = this.processBlankTags(cleanedHtml);
+                        processedHtml = this.processMathFieldTags(processedHtml);
+                        
+                        // 2. Sanitize the processed HTML (but keep math-field tags)
+                        let sanitizedHtml = TranslatorApp.security.sanitize(processedHtml);
+                        
+                        // 3. Create a temporary DOM element to parse the sanitized HTML
                         const tempDiv = document.createElement('div');
                         tempDiv.innerHTML = sanitizedHtml;
                 
@@ -3742,8 +4318,11 @@
                         const isMixed = TranslatorApp.utils.textDirection.isMixed(text);
                         const directionClass = isMixed ? 'mixed-content' : (textDirection === 'rtl' ? 'rtl-auto' : 'ltr-auto');
 
-                        // Handle underscores: ___, ____, _____ etc.
-                        decorated = decorated.replace(/_{3,}/g, (m) => `<span class="blank-slot ${directionClass}" data-blank="${'_'.repeat(m.length)}" dir="${isMixed ? 'auto' : textDirection}"></span>`);
+                        // Handle underscores: ___, ____, _____ etc. (preserve surrounding spaces)
+                        decorated = decorated.replace(/(\s*)_{3,}(\s*)/g, (m, spaceBefore, spaceAfter) => {
+                            const underscores = m.trim();
+                            return `${spaceBefore}<span class="blank-slot ${directionClass}" data-blank="${underscores}" dir="${isMixed ? 'auto' : textDirection}"></span>${spaceAfter}`;
+                        });
 
                         // Handle brackets with underscores: [___], (___), {___}
                         decorated = decorated.replace(/([\[\(\{])_{3,}([\]\)\}])/g, (m, open, close) => {
@@ -3798,8 +4377,11 @@
                                 const nodeDirectionClass = nodeIsMixed ? 'mixed-content' : (nodeDirection === 'rtl' ? 'rtl-auto' : 'ltr-auto');
                                 const nodeDir = nodeIsMixed ? 'auto' : nodeDirection;
 
-                                // Apply blank decoration to text content with proper direction
-                                processedText = processedText.replace(/_{3,}/g, (m) => `<span class="blank-slot ${nodeDirectionClass}" data-blank="${'_'.repeat(m.length)}" dir="${nodeDir}"></span>`);
+                                // Apply blank decoration to text content with proper direction (preserve spaces)
+                                processedText = processedText.replace(/(\s*)_{3,}(\s*)/g, (m, spaceBefore, spaceAfter) => {
+                                    const underscores = m.trim();
+                                    return `${spaceBefore}<span class="blank-slot ${nodeDirectionClass}" data-blank="${underscores}" dir="${nodeDir}"></span>${spaceAfter}`;
+                                });
                                 processedText = processedText.replace(/([\[\(\{])_{3,}([\]\)\}])/g, (m, open, close) => {
                                     const underscores = m.slice(1, -1);
                                     return `${open}<span class="blank-slot ${nodeDirectionClass}" data-blank="${underscores}" dir="${nodeDir}">${underscores}</span>${close}`;
@@ -3898,7 +4480,15 @@
                         }
                         
                         // Remove the visual blank slots from the final HTML before saving
-                        newContent = newContent.replace(/<span class="blank-slot"[^>]*><\/span>/g, '___');
+                        // Handle both empty blank slots and those with content
+                        newContent = newContent.replace(/<span class="blank-slot"[^>]*>(.*?)<\/span>/g, (match, content) => {
+                            // If content is empty or just spaces, use ___
+                            if (!content || content.trim() === '') {
+                                return '___';
+                            }
+                            // If content has actual text, preserve it but convert to underscores
+                            return content.replace(/\S/g, '_').replace(/_+/g, '___');
+                        });
                         this.updateData(fileIndex, path, newContent);
                         this.updateDiff(fileIndex, path);
                         const statusEl = document.getElementById(`status-field-${fileIndex}-${path.replace(/\./g, '-')}`);
@@ -3910,6 +4500,15 @@
                         // Push to history after update is complete
                         TranslatorApp.history.push(TranslatorApp.state.translatedJsonData);
                         TranslatorApp.state.hasUnsavedChanges = true;
+                        
+                        // Update quality indicators and word count for this field
+                        const fieldId = fieldContainer.id;
+                        setTimeout(() => {
+                            this.updateQualityIndicators(fieldId, fileIndex, path);
+                            this.updateWordCount(fieldId);
+                            this.updateStats();
+                            this.checkAndAlert(fieldId, fileIndex, path);
+                        }, 100);
 
                     } catch (error) {
                         console.error('Handle preview field update error:', error);
@@ -3943,31 +4542,35 @@
                                 
                                 const originalId = TranslatorApp.state.originalJsonData[fileIndex]?.data?.id || file.name.replace('.json', '');
                                 const currentMappedId = mappedIdsArray[fileIndex] || null;
-                
-                                // Construct the header HTML with both IDs and their labels
-                                const headerHtml = `
-                                    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                                        <span style="font-weight: normal; font-size: 0.9em; color: var(--secondary-text);">Original ID:</span>
-                                        <span dir="ltr" style="font-family: monospace;">${originalId}</span>
-                                        ${currentMappedId ? `
-                                        <span style="font-weight: normal; font-size: 0.9em; color: var(--secondary-text);">Mapped ID:</span>
-                                        <span dir="ltr" style="font-family: monospace;">${currentMappedId}</span>
-                                        ` : ''}
-                                    </div>
-                                `;
+                                const sourceId = TranslatorApp.state.originalJsonData[fileIndex]?.data?.metadata?.source_id?.value || 
+                                                TranslatorApp.state.originalJsonData[fileIndex]?.data?.source_id?.value || null;
                 
                                 header.innerHTML = `
-                                    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                                        <div style="display: flex; align-items: center;">
-                                            <span style="font-weight: normal; font-size: 0.9em; color: var(--secondary-text);">Original ID:</span>
-                                            <span dir="ltr" style="font-family: monospace; margin-left: 8px;">${originalId}</span>
+                                    <div style="width: 100%;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                                            <div style="display: flex; align-items: center;">
+                                                <span style="font-weight: normal; font-size: 0.9em; color: var(--secondary-text);">Translation ID:</span>
+                                                <span dir="ltr" style="font-family: monospace; margin-left: 8px; color: var(--primary-color); font-weight: 600;">${originalId}</span>
+                                            </div>
+                                            ${sourceId ? `
+                                            <div style="display: flex; align-items: center;">
+                                                <span style="font-weight: normal; font-size: 0.9em; color: var(--secondary-text);">Source ID:</span>
+                                                <span dir="ltr" style="font-family: monospace; margin-left: 8px; color: var(--success-color); font-weight: 600;">${sourceId}</span>
+                                            </div>
+                                            ` : ''}
+                                            ${currentMappedId ? `
+                                            <div style="display: flex; align-items: center;">
+                                                <span style="font-weight: normal; font-size: 0.9em; color: var(--secondary-text);">Mapped ID:</span>
+                                                <span dir="ltr" style="font-family: monospace; margin-left: 8px;">${currentMappedId}</span>
+                                            </div>
+                                            ` : ''}
                                         </div>
-                                        ${currentMappedId ? `
-                                        <div style="display: flex; align-items: center;">
-                                            <span style="font-weight: normal; font-size: 0.9em; color: var(--secondary-text);">Mapped ID:</span>
-                                            <span dir="ltr" style="font-family: monospace; margin-left: 8px;">${currentMappedId}</span>
+                                        <div class="file-progress-bar">
+                                            <div class="file-progress-fill" id="file-progress-fill-${fileIndex}" style="width: 0%"></div>
                                         </div>
-                                        ` : ''}
+                                        <div class="text-xs text-center mt-1" style="color: var(--secondary-text);">
+                                            <span id="file-progress-text-${fileIndex}">0 من 0 حقول</span>
+                                        </div>
                                     </div>
                                 `;
                 
@@ -4007,10 +4610,247 @@
                             }
                         });
                         this.prepareInteractiveMathFields();
+                        
+                        // Update stats and quality indicators after render
+                        setTimeout(() => {
+                            this.updateStats();
+                            this.updateAllQualityIndicators();
+                            this.updateAllWordCounts();
+                            this.loadNotes();
+                        }, 100);
                     } catch (error) {
                         console.error('Preview render error:', error);
                         const { previewContainer } = TranslatorApp.dom;
                         previewContainer.innerHTML = '<div class="p-4" style="color: var(--error-color);">فشل في عرض المعاينة</div>';
+                    }
+                },
+                
+                updateStats() {
+                    try {
+                        let total = 0, completed = 0, edited = 0, warnings = 0;
+                        
+                        document.querySelectorAll('.status-dot').forEach(dot => {
+                            total++;
+                            if (dot.classList.contains('status-translated')) completed++;
+                            if (dot.classList.contains('status-edited')) edited++;
+                        });
+                        
+                        document.querySelectorAll('.field-error, .field-warning').forEach(() => warnings++);
+                        
+                        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+                        
+                        if (TranslatorApp.dom.totalFieldsCount) TranslatorApp.dom.totalFieldsCount.textContent = total;
+                        if (TranslatorApp.dom.completedFieldsCount) TranslatorApp.dom.completedFieldsCount.textContent = completed;
+                        if (TranslatorApp.dom.editedFieldsCount) TranslatorApp.dom.editedFieldsCount.textContent = edited;
+                        if (TranslatorApp.dom.warningsCount) TranslatorApp.dom.warningsCount.textContent = warnings;
+                        if (TranslatorApp.dom.progressPercentage) TranslatorApp.dom.progressPercentage.textContent = `${percentage}%`;
+                    } catch (error) {
+                        console.error('Update stats error:', error);
+                    }
+                },
+                
+                updateAllQualityIndicators() {
+                    try {
+                        document.querySelectorAll('[id^="field-"]').forEach(field => {
+                            if (field.contentEditable === 'true') {
+                                const fieldId = field.id;
+                                const fileIndex = parseInt(field.dataset.fileIndex);
+                                const path = field.dataset.path;
+                                this.updateQualityIndicators(fieldId, fileIndex, path);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('Update all quality indicators error:', error);
+                    }
+                },
+                
+                updateQualityIndicators(fieldId, fileIndex, path) {
+                    try {
+                        const field = document.getElementById(fieldId);
+                        if (!field) return;
+                        
+                        const translatedText = field.textContent || '';
+                        const originalText = this.getOriginalTextByPath(fileIndex, path);
+                        
+                        // Check numbers
+                        const numbersCheck = document.getElementById(`numbers-check-${fieldId}`);
+                        if (numbersCheck) {
+                            const hasNumbers = TranslatorApp.quality.qa.checkNumbers(originalText, translatedText);
+                            numbersCheck.classList.toggle('valid', hasNumbers.length === 0);
+                            numbersCheck.classList.toggle('invalid', hasNumbers.length > 0);
+                        }
+                        
+                        // Check HTML balance
+                        const htmlCheck = document.getElementById(`html-check-${fieldId}`);
+                        if (htmlCheck) {
+                            const htmlErrors = TranslatorApp.quality.qa.checkHtmlBalance(translatedText);
+                            htmlCheck.classList.toggle('valid', htmlErrors.length === 0);
+                            htmlCheck.classList.toggle('invalid', htmlErrors.length > 0);
+                        }
+                        
+                        // Check LaTeX
+                        const latexCheck = document.getElementById(`latex-check-${fieldId}`);
+                        if (latexCheck) {
+                            const hasLatex = translatedText.includes('$') || translatedText.includes('\\');
+                            const isValid = !translatedText.includes('\\alt{') && !translatedText.includes('\\prime');
+                            latexCheck.classList.toggle('valid', !hasLatex || isValid);
+                            latexCheck.classList.toggle('invalid', hasLatex && !isValid);
+                        }
+                        
+                        // Check blanks
+                        const blanksCheck = document.getElementById(`blanks-check-${fieldId}`);
+                        if (blanksCheck) {
+                            const originalBlanks = (originalText.match(/_{3,}/g) || []).length;
+                            const translatedBlanks = (translatedText.match(/_{3,}/g) || []).length + 
+                                                     (field.querySelectorAll('.blank-slot').length || 0);
+                            blanksCheck.classList.toggle('valid', originalBlanks === translatedBlanks);
+                            blanksCheck.classList.toggle('invalid', originalBlanks !== translatedBlanks);
+                        }
+                    } catch (error) {
+                        console.error('Update quality indicators error:', error);
+                    }
+                },
+                
+                updateAllWordCounts() {
+                    try {
+                        document.querySelectorAll('[id^="field-"]').forEach(field => {
+                            if (field.contentEditable === 'true') {
+                                const fieldId = field.id;
+                                this.updateWordCount(fieldId);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('Update all word counts error:', error);
+                    }
+                },
+                
+                updateWordCount(fieldId) {
+                    try {
+                        const field = document.getElementById(fieldId);
+                        if (!field) return;
+                        
+                        const text = field.textContent || '';
+                        const words = text.trim().split(/\s+/).filter(Boolean).length;
+                        const chars = text.length;
+                        
+                        const wordCountEl = document.getElementById(`wordCount-${fieldId}`);
+                        const charCountEl = document.getElementById(`charCount-${fieldId}`);
+                        
+                        if (wordCountEl) wordCountEl.textContent = words;
+                        if (charCountEl) charCountEl.textContent = chars;
+                    } catch (error) {
+                        console.error('Update word count error:', error);
+                    }
+                },
+                
+                getOriginalTextByPath(fileIndex, path) {
+                    try {
+                        let data = TranslatorApp.state.originalJsonData[fileIndex]?.data;
+                        const keys = path.split('.');
+                        for (let key of keys) {
+                            data = data?.[key];
+                        }
+                        return data || '';
+                    } catch (error) {
+                        return '';
+                    }
+                },
+                
+                validateAllFields() {
+                    try {
+                        let totalWarnings = 0;
+                        document.querySelectorAll('[id^="field-"]').forEach(field => {
+                            if (field.contentEditable === 'true') {
+                                const fieldId = field.id;
+                                const fileIndex = parseInt(field.dataset.fileIndex);
+                                const path = field.dataset.path;
+                                
+                                this.updateQualityIndicators(fieldId, fileIndex, path);
+                                this.updateWordCount(fieldId);
+                                
+                                const warnings = field.closest('.border').querySelectorAll('.quality-badge.invalid').length;
+                                if (warnings > 0) {
+                                    field.closest('.border').classList.add('field-warning');
+                                    totalWarnings++;
+                                }
+                            }
+                        });
+                        
+                        this.updateStats();
+                        TranslatorApp.ui.showAlert(`التحقق مكتمل - ${totalWarnings} تحذير`, totalWarnings > 0 ? 'warning' : 'success');
+                    } catch (error) {
+                        console.error('Validate all fields error:', error);
+                    }
+                },
+                
+                applyFilters() {
+                    try {
+                        const typeFilter = this.dom.filterByType?.value || 'all';
+                        const statusFilter = this.dom.filterByStatus?.value || 'all';
+                        const sortBy = this.dom.sortBy?.value || 'default';
+                        
+                        // Apply filters logic here
+                        // This is a placeholder - full implementation would filter based on part.type and status
+                        
+                        TranslatorApp.ui.showAlert('تم تطبيق الفلاتر', 'info', 2000);
+                    } catch (error) {
+                        console.error('Apply filters error:', error);
+                    }
+                },
+                
+                checkAndAlert(fieldId, fileIndex, path) {
+                    try {
+                        const field = document.getElementById(fieldId);
+                        if (!field) return;
+                        
+                        const translatedText = field.textContent || '';
+                        const originalText = this.getOriginalTextByPath(fileIndex, path);
+                        
+                        const alerts = [];
+                        
+                        // Check if field is empty
+                        if (!translatedText.trim()) {
+                            alerts.push('⚠️ الحقل فارغ');
+                        }
+                        
+                        // Check numbers mismatch
+                        const numbersCheck = TranslatorApp.quality.qa.checkNumbers(originalText, translatedText);
+                        if (numbersCheck.length > 0) {
+                            alerts.push('🔢 اختلاف في الأرقام');
+                        }
+                        
+                        // Check missing blanks
+                        const originalBlanks = (originalText.match(/_{3,}/g) || []).length;
+                        const translatedBlanks = (translatedText.match(/_{3,}/g) || []).length + 
+                                                 (field.querySelectorAll('.blank-slot').length || 0);
+                        if (originalBlanks !== translatedBlanks) {
+                            alerts.push(`__ فراغات ناقصة (${translatedBlanks}/${originalBlanks})`);
+                        }
+                        
+                        // Check HTML balance
+                        const htmlErrors = TranslatorApp.quality.qa.checkHtmlBalance(translatedText);
+                        if (htmlErrors.length > 0) {
+                            alerts.push('🏷️ HTML غير متوازن');
+                        }
+                        
+                        // Check LaTeX errors
+                        if (translatedText.includes('\\alt{') || translatedText.includes('\\prime')) {
+                            alerts.push('📐 LaTeX خاطئ (نص عربي)');
+                        }
+                        
+                        // Apply visual indicators
+                        const fieldWrapper = field.closest('.border');
+                        if (alerts.length > 0) {
+                            fieldWrapper?.classList.add('field-error');
+                            // Show subtle notification
+                            console.warn(`Field ${fieldId}:`, alerts.join(', '));
+                        } else {
+                            fieldWrapper?.classList.remove('field-error', 'field-warning');
+                            fieldWrapper?.classList.add('field-success');
+                        }
+                        
+                    } catch (error) {
+                        console.error('Check and alert error:', error);
                     }
                 },
                 renderReadOnlyField(label, originalValue, translatedValue) {
@@ -4091,7 +4931,7 @@
                                 </div>
                             </div>
                             <div class="mt-4 hidden">
-                                <p class="text-sm font-semibold mb-1" style="color: var(--secondary-text);">مقارنة الفروقات</p>
+                                <p class="text-sm font-semibold mb-1" style="color: var(--secondary-text);">مقارنة الفروقات (الترجمة الأولية مقابل الترجمة الحالية)</p>
                                 <div id="diff-field-${fileIndex}-${path.replace(/\./g, '-')}" class="diff-view"></div>
                             </div>
                         </div>
@@ -4162,7 +5002,7 @@
                                             <div>
                                                 <p class="text-sm font-semibold mb-1" style="color: var(--secondary-text);">الأصلي</p>
                                                 <div class="original-text-readonly p-3 rounded-lg text-sm h-full" style="background-color: var(--bg-color); overflow:auto;">
-                                                    <div dir="auto">${this.renderContentWithMath(displayOriginalValue)}</div>
+                                                    <div dir="ltr">${this.renderContentWithMath(displayOriginalValue)}</div>
                                                 </div>
                                             </div>
                                             <div>
@@ -4176,8 +5016,37 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        <!-- عداد الكلمات ومؤشرات الجودة -->
+                                        <div class="flex justify-between items-center mt-3 pt-3 border-t" style="border-color: var(--card-border);">
+                                            <div class="flex gap-3 text-xs" style="color: var(--secondary-text);">
+                                                <span>الكلمات: <span class="font-bold" id="wordCount-${fieldId}">-</span></span>
+                                                <span>الأحرف: <span class="font-bold" id="charCount-${fieldId}">-</span></span>
+                                            </div>
+                                            <div class="flex gap-1" id="quality-indicators-${fieldId}">
+                                                <span class="quality-badge" id="numbers-check-${fieldId}" title="تطابق الأرقام">🔢</span>
+                                                <span class="quality-badge" id="html-check-${fieldId}" title="توازن HTML">🏷️</span>
+                                                <span class="quality-badge" id="latex-check-${fieldId}" title="صحة LaTeX">📐</span>
+                                                <span class="quality-badge" id="blanks-check-${fieldId}" title="Blanks سليمة">__</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- أزرار الإجراءات السريعة -->
+                                        <div class="flex gap-1 mt-2">
+                                            <button class="action-btn" title="نسخ الترجمة" onclick="TranslatorApp.preview.copyTranslation('${fieldId}')">📋</button>
+                                            <button class="action-btn" title="استعادة الترجمة الآلية" onclick="TranslatorApp.preview.restoreAI('${fieldId}', '${path}', ${fileIndex})">🤖</button>
+                                            <button class="action-btn" title="إضافة ملاحظة" onclick="TranslatorApp.preview.toggleNotes('${fieldId}')">📝</button>
+                                        </div>
+                                        
+                                        <!-- قسم الملاحظات -->
+                                        <div id="notes-${fieldId}" class="hidden mt-2">
+                                            <textarea class="w-full text-xs p-2 border rounded" 
+                                                      placeholder="اكتب ملاحظاتك هنا..." 
+                                                      rows="2"
+                                                      onchange="TranslatorApp.preview.saveNote('${fieldId}', this.value)"></textarea>
+                                        </div>
+                                        
                                         <div class="mt-4 hidden">
-                                             <p class="text-sm font-semibold mb-1" style="color: var (--secondary-text);">مقارنة الفروقات</p>
+                                             <p class="text-sm font-semibold mb-1" style="color: var (--secondary-text);">مقارنة الفروقات (الترجمة الأولية مقابل الترجمة الحالية)</p>
                                             <div id="${diffId}" class="diff-view"></div>
                                         </div>
                                     </div>`;
@@ -4219,9 +5088,17 @@
                                     }
                                 }
                 
+                                // Add choices section header for better organization
+                                if (part.choices && part.choices.length > 0) {
+                                    html += '<div class="mt-4 mb-2"><h6 class="font-semibold text-sm" style="color: var(--secondary-text);">الخيارات (Choices):</h6></div>';
+                                }
+                                
                                 part.choices?.forEach((choice, choiceIndex) => {
                                     const originalChoice = originalPart.choices[choiceIndex];
-                                    html += renderField(`خيار ${choiceIndex + 1}`, originalChoice.html_content, choice.html_content, `parts.${partIndex}.choices.${choiceIndex}.html_content`);
+                                    const isCorrect = choice.is_correct || false;
+                                    const correctBadge = isCorrect ? ' <span style="background-color: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">✓ صحيح</span>' : '';
+                                    // Use 'auto' for choices to respect math-field LTR while keeping text RTL
+                                    html += renderField(`خيار ${choiceIndex + 1}${correctBadge}`, originalChoice.html_content, choice.html_content, `parts.${partIndex}.choices.${choiceIndex}.html_content`, 'auto');
                                 });
                 
                                 if (originalPart.gap_text_keys) {
@@ -4338,17 +5215,19 @@
                         if (!diffContainer) return;
 
                         const keys = path.split('.');
-                        let originalText = TranslatorApp.state.originalJsonData[fileIndex].data;
-                        let translatedText = TranslatorApp.state.translatedJsonData[fileIndex].data;
+                        // Compare initial translation with current translation (both in Arabic)
+                        let initialText = TranslatorApp.state.initialTranslatedJsonData[fileIndex]?.data;
+                        let currentText = TranslatorApp.state.translatedJsonData[fileIndex].data;
+                        
                         for (let i = 0; i < keys.length; i++) {
-                            originalText = originalText ? originalText[keys[i]] : '';
-                            translatedText = translatedText ? translatedText[keys[i]] : '';
+                            initialText = initialText ? initialText[keys[i]] : '';
+                            currentText = currentText ? currentText[keys[i]] : '';
                         }
 
-                        const cleanOriginal = this.plainTextForDiff(originalText || '');
-                        const cleanTranslated = this.plainTextForDiff(translatedText || '');
+                        const cleanInitial = this.plainTextForDiff(initialText || '');
+                        const cleanCurrent = this.plainTextForDiff(currentText || '');
 
-                        diffContainer.innerHTML = this.createDiffHtml(cleanOriginal, cleanTranslated);
+                        diffContainer.innerHTML = this.createDiffHtml(cleanInitial, cleanCurrent);
                     } catch (error) {
                         console.error('Update diff error:', error);
                     }
@@ -4359,9 +5238,55 @@
                         const mathFields = TranslatorApp.dom.previewContainer.querySelectorAll('math-field');
                         mathFields.forEach(mf => {
                             try {
-                                mf.removeAttribute('read-only');
+                                // Check if this math-field is in an editable area
+                                const isInEditableArea = mf.closest('.editable-preview-field');
+                                const isInOriginal = mf.closest('.original-text-readonly');
+                                
+                                // Only remove read-only from editable areas
+                                if (isInEditableArea) {
+                                    mf.removeAttribute('read-only');
+                                } else if (isInOriginal) {
+                                    // Keep read-only for original text
+                                    mf.setAttribute('read-only', 'true');
+                                }
+                                
                                 mf.setAttribute('virtual-keyboard-mode', 'onfocus');
                                 mf.setAttribute('use-shared-virtual-keyboard', '');
+                                
+                                // Add delete button only for editable math-fields
+                                if (isInEditableArea && !mf.querySelector('.math-field-delete-btn')) {
+                                    const deleteBtn = document.createElement('button');
+                                    deleteBtn.className = 'math-field-delete-btn';
+                                    deleteBtn.textContent = '×';
+                                    deleteBtn.title = 'حذف المعادلة';
+                                    deleteBtn.onclick = (event) => {
+                                        event.stopPropagation();
+                                        event.preventDefault();
+                                        const fieldContainer = mf.closest('.editable-preview-field');
+                                        mf.remove();
+                                        if (fieldContainer) {
+                                            TranslatorApp.preview.handlePreviewFieldUpdate(fieldContainer);
+                                        }
+                                    };
+                                    mf.appendChild(deleteBtn);
+                                }
+                                
+                                // Add copy button for original math-fields
+                                if (isInOriginal && !mf.querySelector('.math-field-copy-btn')) {
+                                    const copyBtn = document.createElement('button');
+                                    copyBtn.className = 'math-field-copy-btn';
+                                    copyBtn.textContent = '📋';
+                                    copyBtn.title = 'نسخ المعادلة';
+                                    copyBtn.onclick = (event) => {
+                                        event.stopPropagation();
+                                        event.preventDefault();
+                                        const value = mf.value || '';
+                                        navigator.clipboard.writeText(`$${value}$`).then(() => {
+                                            TranslatorApp.ui.showAlert('تم نسخ المعادلة', 'success', 1500);
+                                        });
+                                    };
+                                    mf.appendChild(copyBtn);
+                                }
 
                                 // Enhanced language support for MathLive
                                 mf.setAttribute('virtual-keyboard-layout', 'qwerty');
@@ -4478,6 +5403,83 @@
                     }
                 },
 
+                // Helper functions for new features
+                copyTranslation(fieldId) {
+                    try {
+                        const field = document.getElementById(fieldId);
+                        if (field) {
+                            const text = field.textContent || '';
+                            navigator.clipboard.writeText(text).then(() => {
+                                TranslatorApp.ui.showAlert('تم نسخ الترجمة', 'success', 2000);
+                            });
+                        }
+                    } catch (error) {
+                        console.error('Copy translation error:', error);
+                    }
+                },
+                
+                restoreAI(fieldId, path, fileIndex) {
+                    try {
+                        const initialData = TranslatorApp.state.initialTranslatedJsonData[fileIndex];
+                        if (!initialData) {
+                            TranslatorApp.ui.showAlert('لا توجد ترجمة آلية محفوظة', 'info', 3000);
+                            return;
+                        }
+                        
+                        const field = document.getElementById(fieldId);
+                        if (field) {
+                            // Get initial translation from saved data
+                            let data = initialData.data;
+                            const keys = path.split('.');
+                            for (let key of keys) {
+                                data = data[key];
+                            }
+                            field.innerHTML = TranslatorApp.preview.renderContentWithMath(data);
+                            TranslatorApp.preview.handlePreviewFieldUpdate(field);
+                            TranslatorApp.ui.showAlert('تم استعادة الترجمة الآلية', 'success', 2000);
+                        }
+                    } catch (error) {
+                        console.error('Restore AI error:', error);
+                        TranslatorApp.ui.showAlert('فشل في استعادة الترجمة', 'error');
+                    }
+                },
+                
+                toggleNotes(fieldId) {
+                    try {
+                        const notesDiv = document.getElementById(`notes-${fieldId}`);
+                        if (notesDiv) {
+                            notesDiv.classList.toggle('hidden');
+                        }
+                    } catch (error) {
+                        console.error('Toggle notes error:', error);
+                    }
+                },
+                
+                saveNote(fieldId, noteText) {
+                    try {
+                        const notes = JSON.parse(localStorage.getItem('translationNotes') || '{}');
+                        notes[fieldId] = noteText;
+                        localStorage.setItem('translationNotes', JSON.stringify(notes));
+                        TranslatorApp.state.hasUnsavedChanges = true;
+                    } catch (error) {
+                        console.error('Save note error:', error);
+                    }
+                },
+                
+                loadNotes() {
+                    try {
+                        const notes = JSON.parse(localStorage.getItem('translationNotes') || '{}');
+                        Object.keys(notes).forEach(fieldId => {
+                            const textarea = document.querySelector(`#notes-${fieldId} textarea`);
+                            if (textarea) {
+                                textarea.value = notes[fieldId];
+                            }
+                        });
+                    } catch (error) {
+                        console.error('Load notes error:', error);
+                    }
+                },
+
                 copyOriginalText(button) {
                     try {
                         const fieldContainer = button.closest('.border').querySelector('.original-text-readonly');
@@ -4543,7 +5545,7 @@
             },
             export: {
                 exportAs(format) {
-                    return (format === 'csv') ? this.toCsv() : this.toJson();
+                    return this.toJson();
                 },
 
                 async toJson() {
@@ -4633,55 +5635,12 @@
                         link.click();
                         document.body.removeChild(link);
                         URL.revokeObjectURL(link.href);
-                        TranslatorApp.ui.showAlert('تم إنشاء ملف ZIP بنجاح!', 'success');
+                        TranslatorApp.ui.showAlert('تم تصدير ملفات JSON بنجاح!', 'success');
                     } catch (e) {
                         console.error('ZIP creation error:', e);
                         TranslatorApp.ui.showAlert(`فشل إنشاء ملف ZIP: ${e.message}`, 'error');
                     }
                 },
-                async toCsv() {
-                    let csv = '\uFEFFFileName,PartIndex,Type,OriginalText,TranslatedText\r\n';
-                    TranslatorApp.state.originalJsonData.forEach((originalFile, fileIndex) => {
-                        const translatedFile = TranslatorApp.state.translatedJsonData[fileIndex];
-                        const fileName = originalFile.name;
-                        const addRow = (partIndex, type, originalText, translatedText) => {
-                            const escape = (str) => { const div = document.createElement('div'); div.innerHTML = str || ''; const text = (div.textContent || div.innerText || '').replace(/"/g, '""'); return `"${text}"`; };
-                            csv += [fileName, partIndex, type, escape(originalText), escape(translatedText)].join(',') + '\r\n';
-                        };
-                        addRow(0, 'statement', originalFile.data.statement, translatedFile.data.statement);
-                        originalFile.data.parts.forEach((part, partIndex) => {
-                            const translatedPart = translatedFile.data.parts[partIndex];
-                            addRow(partIndex + 1, 'stem', part.stem, translatedPart.stem);
-                            if (typeof part.answer === 'string') {
-                                addRow(partIndex + 1, 'answer', part.answer, translatedPart.answer);
-                            } else if (part.answer && typeof part.answer === 'object' && part.answer.hasOwnProperty('value')) {
-                                addRow(partIndex + 1, 'answer', part.answer.value, translatedPart.answer.value);
-                            }
-                            part.choices.forEach((choice, choiceIndex) => {
-                                addRow(partIndex + 1, `choice_${choiceIndex + 1}`, choice.html_content, translatedPart.choices[choiceIndex].html_content);
-                            });
-                            part.gap_text_keys?.forEach((keyItem, keyIndex) => {
-                                addRow(partIndex + 1, `gap_text_key_${keyIndex + 1}`, keyItem.value, translatedPart.gap_text_keys[keyIndex].value);
-                            });
-                        });
-                    });
-
-                    try {
-                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-                        const url = URL.createObjectURL(blob);
-                        const link = document.createElement("a");
-                        link.href = url;
-                        link.download = `translated_data_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        URL.revokeObjectURL(url);
-                        TranslatorApp.ui.showAlert('تم إنشاء ملف CSV بنجاح!', 'success');
-                    } catch (e) {
-                        console.error('CSV creation error:', e);
-                        TranslatorApp.ui.showAlert(`فشل إنشاء ملف CSV: ${e.message}`, 'error');
-                    }
-                }, // This closes the toCsv method
                 annotator: {
                     canvas: null,
                     fabricCanvas: null,
@@ -4796,7 +5755,7 @@
                     }
                 }
             }
-        }
+        };
 
 
         document.addEventListener('DOMContentLoaded', () => TranslatorApp.init());
