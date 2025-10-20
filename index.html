@@ -10,6 +10,59 @@
 
     <!-- MathLive for LaTeX editing -->
     <script src="https://unpkg.com/@nagwa-limited/mathlive" defer></script>
+    <script>
+        // CRITICAL FIX: Ensure MathLive loads properly
+        function ensureMathLiveLoaded() {
+            return new Promise((resolve) => {
+                if (typeof window.MathfieldElement !== 'undefined') {
+                    console.log('✅ [MathLive] MathfieldElement already loaded');
+                    resolve();
+                } else {
+                    console.log('🔢 [MathLive] Waiting for MathfieldElement to load...');
+                    const checkInterval = setInterval(() => {
+                        if (typeof window.MathfieldElement !== 'undefined') {
+                            console.log('✅ [MathLive] MathfieldElement loaded successfully');
+                            clearInterval(checkInterval);
+                            resolve();
+                        }
+                    }, 100);
+                }
+            });
+        }
+        
+        // CRITICAL FIX: Global function to rescan math elements
+        window.rescanMathElements = function() {
+            if (window.MathfieldElement && typeof window.MathfieldElement.scan === 'function') {
+                console.log('🔢 [MathLive] Rescanning all math-field elements...');
+                window.MathfieldElement.scan(document.body);
+            }
+        };
+        
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('🔢 [MathLive] DOM loaded, checking MathLive...');
+            
+            ensureMathLiveLoaded().then(() => {
+                // Force initialization of all math-field elements
+                setTimeout(() => {
+                    const mathFields = document.querySelectorAll('math-field');
+                    console.log(`🔢 [MathLive] Found ${mathFields.length} math-field elements to initialize`);
+                    
+                    mathFields.forEach((mf, index) => {
+                        try {
+                            // Force MathLive to process the element
+                            if (mf.value && !mf.innerHTML.includes('math-field')) {
+                                mf.setAttribute('value', mf.value);
+                                mf.dispatchEvent(new Event('input'));
+                                mf.dispatchEvent(new Event('change'));
+                            }
+                        } catch (err) {
+                            console.warn(`MathLive error for math-field ${index}:`, err);
+                        }
+                    });
+                }, 100);
+            });
+        });
+    </script>
     <!-- Fabric.js for simple image annotation/editor -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
 
@@ -284,7 +337,73 @@
             position: relative;
         }
 
-        .math-field-delete-btn {
+        /* CRITICAL FIX: Ensure math-field renders properly */
+        math-field[read-only] {
+            background-color: transparent;
+            border: none;
+            padding: 0;
+            cursor: default;
+        }
+        
+        /* Force MathLive rendering - DISABLED */
+        /* math-field:not([data-mathlive-initialized]) {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        math-field[data-mathlive-initialized] {
+            opacity: 1;
+        } */
+        
+        /* CRITICAL FIX: Ensure proper MathLive display */
+        math-field {
+            display: inline-block;
+            min-width: 20px;
+            min-height: 20px;
+        }
+        
+        /* Fix for broken HTML entities in math-field - DISABLED */
+        /* math-field[value*="&am"] {
+            opacity: 0.8;
+        } */
+        
+        /* Ensure MathLive renders properly - DISABLED */
+        /* math-field:not(:defined) {
+            opacity: 0;
+        }
+        
+        math-field:defined {
+            opacity: 1;
+        } */
+        
+        /* CRITICAL FIX: Force MathLive rendering for all math-field elements - DISABLED */
+        /* math-field {
+            display: inline-block !important;
+            min-width: 20px !important;
+            min-height: 20px !important;
+            background: transparent !important;
+            border: none !important;
+            padding: 2px !important;
+            margin: 0 !important;
+        } */
+        
+        /* Hide raw LaTeX content and show rendered math - DISABLED */
+        /* math-field[value] {
+            color: inherit !important;
+            font-family: inherit !important;
+        } */
+        
+        /* Ensure MathLive takes over the rendering - DISABLED */
+        /* math-field:not([data-mathlive-initialized]) {
+            visibility: hidden;
+        }
+        
+        math-field[data-mathlive-initialized] {
+            visibility: visible;
+        } */
+
+        /* Math field buttons - DISABLED */
+        /* .math-field-delete-btn {
             position: absolute;
             top: -10px;
             left: -10px;
@@ -345,7 +464,7 @@
         .math-field-copy-btn:hover {
             background-color: var(--success-color);
             transform: scale(1.1);
-        }
+        } */
         /* MathLive default look (editable) */
         math-field {
             border: 1px solid var(--input-border);
@@ -1116,6 +1235,16 @@
                 <select id="subjectSelect" class="p-2 border rounded-lg w-full"></select>
                 <select id="gradeSelect" class="p-2 border rounded-lg w-full"></select>
             </div>
+            <!-- ⚠️ Math Grade Warning -->
+            <div id="mathGradeWarning" style="display: none; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: start; gap: 8px;">
+                    <span style="font-size: 20px;">⚠️</span>
+                    <div style="flex: 1;">
+                        <strong style="color: #856404;">تنبيه هام للرياضيات:</strong>
+                        <p style="margin: 4px 0 0 0; font-size: 14px; color: #856404;" id="mathGradeWarningText"></p>
+                    </div>
+                </div>
+            </div>
             <h4 class="text-lg font-semibold mb-2">معاينة التعليمات (البرومبت)</h4>
             <textarea id="promptPreview" rows="8" class="w-full p-2 rounded-lg mb-4" readonly></textarea>
             <button id="applyPromptBtn" class="w-full text-white font-bold py-2 px-4 rounded-lg"
@@ -1406,6 +1535,7 @@
                                 newMathField.setAttribute('virtual-keyboard-mode', 'onfocus');
                                 newMathField.setAttribute('use-shared-virtual-keyboard', '');
                                 newMathField.setAttribute('dir', 'ltr');
+                                newMathField.setAttribute('locale', 'ar');
                                 
                                 // Insert the new math field
                                 range.insertNode(newMathField);
@@ -1974,6 +2104,7 @@
                                             newMathField.setAttribute('virtual-keyboard-mode', 'onfocus');
                                             newMathField.setAttribute('use-shared-virtual-keyboard', '');
                                             newMathField.setAttribute('dir', 'ltr');
+                                            newMathField.setAttribute('locale', 'ar');
                                             
                                             // Insert math field
                                             range.insertNode(newMathField);
@@ -2013,6 +2144,7 @@
                                     newMathField.setAttribute('virtual-keyboard-mode', 'onfocus');
                                     newMathField.setAttribute('use-shared-virtual-keyboard', '');
                                     newMathField.setAttribute('dir', 'ltr');
+                                    newMathField.setAttribute('locale', 'ar');
                                     
                                     // Insert math field
                                     range.insertNode(newMathField);
@@ -2317,10 +2449,189 @@
                  * @param {object} basePointer - معلومات لتحديد مصدر النص (رقم الملف، الجزء، إلخ).
                  * @returns {{jobs: Array, parsedBody: HTMLElement}} - كائن يحتوي على قائمة مهام الترجمة والهيكل.
                  */
+                /**
+                 * ✨ IMPROVED VERSION - Hybrid Approach (Regex + DOMParser)
+                 * تنظيف وإصلاح math-field tags المتداخلة والمكسورة
+                 * 
+                 * التحسينات:
+                 * - يحافظ على جميع attributes (id, class, data-*, إلخ)
+                 * - regex محسّن لإصلاح broken value attributes
+                 * - استخدام DOMParser لمعالجة آمنة
+                 * - fallback آمن في حالة فشل DOMParser
+                 * 
+                 * @param {string} htmlString - كود HTML المراد تنظيفه
+                 * @returns {string} - HTML نظيف
+                 */
+                /* // <--- تعطيل دالة cleanMathFieldTags
+                cleanMathFieldTags(htmlString) {
+                    if (!htmlString || typeof htmlString !== 'string') return htmlString;
+                    
+                    let cleaned = htmlString;
+                    
+                    // PHASE 1: Pre-normalization - Fix broken tag names
+                    // إصلاح أسماء tags المكسورة مثل <math-fieldvalue= → <math-field value=
+                    try {
+                        const dash = '[\\-\u2212\u2013\u2014]'; // Support different dash types
+                        cleaned = cleaned
+                            .replace(new RegExp(`<\\s*math\\s*${dash}\\s*fieldvalue\\s*=`, 'gi'), '<math-field value=')
+                            .replace(new RegExp(`<\\s*math\\s*${dash}\\s*field\\s*value\\s*=`, 'gi'), '<math-field value=')
+                            .replace(new RegExp(`<\\s*math\\s*${dash}\\s*fielddefault-mode\\s*=`, 'gi'), '<math-field default-mode=')
+                            .replace(new RegExp(`<\\s*math\\s*${dash}\\s*field`, 'gi'), '<math-field');
+                    } catch (e) {
+                        console.warn('✗ Pre-normalization failed:', e);
+                    }
+                    
+                    // PHASE 2: Fix broken value attributes using IMPROVED regex
+                    // إصلاح value attributes التي تحتوي على HTML tags
+                    try {
+                        // ✨ Better pattern - looks for < inside value attribute more accurately
+                        cleaned = cleaned.replace(
+                            /<math-field([^>]*?)value\s*=\s*"([^"]*<[^"]*?)"([^>]*?)>/gi,
+                            (fullMatch, beforeValue, brokenValue, afterValue) => {
+                                // Clean value from all tags
+                                let cleanValue = brokenValue
+                                    .replace(/<\/?math-field[^>]*>/gi, '') // Remove math-field tags
+                                    .replace(/<math-fieldvalue=/gi, '')     // Remove broken patterns
+                                    .replace(/<[^>]+>/g, '');                // Remove any other HTML tags
+                                
+                                return `<math-field${beforeValue}value="${cleanValue}"${afterValue}>`;
+                            }
+                        );
+                    } catch (e) {
+                        console.warn('✗ Value attribute cleaning failed:', e);
+                    }
+                    
+                    // PHASE 3: Remove nested tags from content using DOMParser
+                    // معالجة DOM tree بشكل صحيح وآمن
+                    try {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(`<div>${cleaned}</div>`, 'text/html');
+                        const container = doc.body.firstChild;
+                        
+                        if (!container) return cleaned; // Safety check
+                        
+                        const mathFields = container.querySelectorAll('math-field');
+                        
+                        mathFields.forEach(field => {
+                            // Remove nested math-fields from content
+                            const nested = field.querySelectorAll('math-field');
+                            nested.forEach(n => n.remove());
+                            
+                            // Clean value attribute one more time (for safety)
+                            let value = field.getAttribute('value') || '';
+                            if (value) {
+                                value = value
+                                    .replace(/<math-field[^>]*>/gi, '')
+                                    .replace(/<\/math-field>/gi, '')
+                                    .replace(/<math-fieldvalue=/gi, '');
+                                field.setAttribute('value', value);
+                            }
+                            
+                            // ✨ CRITICAL FIX: KEEP virtual-keyboard-mode and use-shared-virtual-keyboard!
+                            // تأكد من الحفاظ على attributes مهمة للعرض الصحيح
+                            
+                            // حذف فقط attributes بقيم سيئة (undefined, -1)
+                            const attrsToCheck = Array.from(field.attributes);
+                            attrsToCheck.forEach(attr => {
+                                const name = attr.name;
+                                const value = attr.value;
+                                
+                                // KEEP these critical attributes - NEVER remove them!
+                                const keepAlways = [
+                                    'value', 
+                                    'default-mode',
+                                    'dir',
+                                    'locale',
+                                    'virtual-keyboard-mode',      // ✅ CRITICAL
+                                    'use-shared-virtual-keyboard', // ✅ CRITICAL
+                                    'id',
+                                    'class',
+                                    'contenteditable'
+                                ];
+                                
+                                if (keepAlways.includes(name)) return; // Don't remove
+                                
+                                // Remove only if value is undefined, -1, empty, or null
+                                if (value === 'undefined' || value === '-1' || value === '' || value === null) {
+                                    field.removeAttribute(name);
+                                }
+                            });
+                            
+                            // ✨ Remove ONLY style="padding: 0" or style="padding:0"
+                            const style = field.getAttribute('style');
+                            if (style && (style.trim() === 'padding: 0' || style.trim() === 'padding:0')) {
+                                field.removeAttribute('style');
+                            }
+                            
+                            // ✅ ENSURE critical attributes exist
+                            if (!field.hasAttribute('virtual-keyboard-mode')) {
+                                field.setAttribute('virtual-keyboard-mode', 'onfocus');
+                            }
+                            if (!field.hasAttribute('use-shared-virtual-keyboard')) {
+                                field.setAttribute('use-shared-virtual-keyboard', '');
+                            }
+                        });
+                        
+                        cleaned = container.innerHTML;
+                        
+                    } catch (e) {
+                        console.warn('✗ DOMParser phase failed, using regex fallback:', e);
+                        
+                        // Fallback: Use regex if DOMParser fails
+                        cleaned = cleaned.replace(
+                            /<math-field([^>]*)>(.*?)<\/math-field>/gs,
+                            (fullMatch, attributes, content) => {
+                                // Remove nested math-field tags from content
+                                let cleanContent = content.replace(/<\/?math-field[^>]*>/g, '');
+                                return `<math-field${attributes}>${cleanContent}</math-field>`;
+                            }
+                        );
+                    }
+                    
+                    return cleaned;
+                },
+                */ // <--- نهاية التعطيل
+                
+                // CRITICAL FIX: Clean math-field attributes from DOM element
+                cleanMathFieldAttributes(mathFieldElement) {
+                    try {
+                        const attrs = {};
+                        
+                        // Extract value
+                        attrs.value = mathFieldElement.getAttribute('value') || '';
+                        
+                        // Extract default-mode (avoid duplicates)
+                        const defaultMode = mathFieldElement.getAttribute('default-mode');
+                        attrs.defaultMode = defaultMode || 'inline-math';
+                        
+                        // Extract dir
+                        const dir = mathFieldElement.getAttribute('dir');
+                        attrs.dir = dir || 'ltr';
+                        
+                        // Extract locale
+                        const locale = mathFieldElement.getAttribute('locale');
+                        attrs.locale = locale || 'en';
+                        
+                        return attrs;
+                    } catch (error) {
+                        console.warn('Error cleaning math-field attributes:', error);
+                        return {
+                            value: mathFieldElement.value || '',
+                            defaultMode: 'inline-math',
+                            dir: 'ltr',
+                            locale: 'en'
+                        };
+                    }
+                },
+
                 parseHtmlAndCreateJobs(htmlString, basePointer) {
+                    // First clean the math-field tags before processing
+                    // const cleanedHtml = this.cleanMathFieldTags(htmlString); // <--- عطّل هذا السطر
+                    const cleanedHtml = htmlString; // <--- تأكد أن هذا السطر غير معطل
+                    
                     const jobs = [];
                     const parser = new DOMParser();
-                    const doc = parser.parseFromString(`<!DOCTYPE html><body>${htmlString}</body>`, 'text/html');
+                    const doc = parser.parseFromString(`<!DOCTYPE html><body>${cleanedHtml}</body>`, 'text/html');
                     const body = doc.body;
 
                     function traverse(node) {
@@ -2559,6 +2870,42 @@
                     };
                     return text.replace(/[&<>"']/g, m => map[m]);
                 },
+                unescapeHtml(text) {
+                    if (typeof text !== 'string') return text;
+                    const map = {
+                        '&amp;': '&',
+                        '&lt;': '<',
+                        '&gt;': '>',
+                        '&quot;': '"',
+                        '&#039;': "'",
+                        '&#39;': "'",
+                        '&am;': '&',  // Fix for broken entities like &am;
+                        '&amع;': '&', // Fix for broken entities with Arabic chars
+                        '&amع': '&'   // Fix for incomplete entities
+                    };
+                    
+                    // CRITICAL FIX: Handle multiple passes for complex entities
+                    let result = text;
+                    for (const [entity, replacement] of Object.entries(map)) {
+                        result = result.replace(new RegExp(entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replacement);
+                    }
+                    
+                    // Additional fix for malformed entities that might appear
+                    result = result.replace(/&am[^;]*;/g, '&');
+                    result = result.replace(/&[^;]*ع[^;]*;/g, '&');
+                    
+                    // CRITICAL FIX: Handle specific broken entities from LaTeX processing
+                    result = result.replace(/&amع;/g, '&');
+                    result = result.replace(/&amع/g, '&');
+                    result = result.replace(/&am;/g, '&');
+                    
+                    // Fix for double-encoded entities
+                    result = result.replace(/&amp;amp;/g, '&');
+                    result = result.replace(/&amp;lt;/g, '<');
+                    result = result.replace(/&amp;gt;/g, '>');
+                    
+                    return result;
+                },
                 sanitize(html) {
                     if (typeof html !== 'string') return html;
                     try {
@@ -2596,22 +2943,56 @@
                     'h': 'س'
                 },
                 wantsArabicIndicDigits(subject, grade) {
-                    if (subject === 'Mathematics' && ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].includes(grade)) return true;
-                    if (subject === 'Science' && grade === 'Grade 9') return true;
+                    // Mathematics: All grades should use Arabic digits
+                    if (subject === 'Mathematics') return true;
+                    
+                    // Science: All grades should use Arabic digits  
+                    if (subject === 'Science') return true;
+                    
+                    // Physics: All grades should use Arabic digits
+                    if (subject === 'Physics') return true;
+                    
+                    // Chemistry: All grades should use Arabic digits
+                    if (subject === 'Chemistry') return true;
+                    
+                    // Biology: All grades should use Arabic digits
+                    if (subject === 'Biology') return true;
+                    
                     return false;
+                },
+                
+                shouldConvertDigitsToArabic(subject, grade) {
+                    // Use the same logic as wantsArabicIndicDigits
+                    return this.wantsArabicIndicDigits(subject, grade);
+                },
+                
+                shouldConvertSymbolsToArabic(subject, grade) {
+                    // Convert symbols only for Mathematics and specific grades
+                    const arabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+                    return subject === 'Mathematics' && arabicGrades.includes(grade);
                 },
                 cleanLatexArabic(text) {
                     if (typeof text !== 'string') return text;
-                    // This is a simple but effective fix for the specific issue
-                    return text.replace(/\\alt{\\alef}\\prime/g, '')
-                               .replace(/\\lam/g, 'والباقي ');
+                    // CRITICAL FIX: Remove problematic LaTeX commands that appear in Arabic text
+                    return text.replace(/\\alt{\\alef}\\prime/g, '')  // Remove \alt{\alef}\prime
+                               .replace(/\\lam/g, 'والباقي ')        // Replace \lam with Arabic text
+                               .replace(/\\alt{\\alef}/g, '')         // Remove \alt{\alef}
+                               .replace(/\\prime/g, '')              // Remove \prime
+                               .replace(/\\alef/g, '')               // Remove \alef
+                               .replace(/\\alt/g, '');               // Remove \alt
                 },
                 
                 protectSegments(text) {
                     const placeholders = {};
                     let idx = 0;
                     const patterns = [
+                        // ✅ CRITICAL: Protect math-field tags - DO NOT send to AI
+                        // The AI should NOT translate mathematical content inside math-field
+                        // Our post-processing functions will handle math conversion
                         /<math-field[\s\S]*?<\/math-field>/g,
+                        // Protect blank/gap tags - these are special input fields
+                        /<span[^>]*data-node-type=["']blank-line["'][^>]*>[\s\S]*?<\/span>/g,
+                        /<span[^>]*data-blank[^>]*>[\s\S]*?<\/span>/g,
                         /<audio[\s\S]*?<\/audio>/g,
                         /<img[^>]*>/g,
                         // Don't protect tables - let their content be translated
@@ -2619,25 +3000,52 @@
                         /_{3,}/g,
                         /```[\s\S]*?```/g,
                         /`[^`]*`/g,
+                        // Protect all LaTeX expressions
                         /\$\$[\s\S]*?\$\$/g,
                         /\$[^$]*\$/g,
                         /\\\[[\s\S]*?\\]/g,
                         /\\\([\s\S]*?\\\)/g,
+                        // Protect LaTeX commands
+                        /\\displaystyle\{[^}]*\}/g,
+                        /\\begin\{[^}]+\}[\s\S]*?\\end\{[^}]+\}/g,
+                        /\\left[\[\(\{][\s\S]*?\\right[\]\)\}]/g,
                         /https?:\/\/\S+/g,
                         // Protect Lexical theme elements that might interfere with translation
                         /<span[^>]*class="[^"]*LexicalTheme[^"]*"[^>]*>[\s\S]*?<\/span>/g,
                         /<p[^>]*class="[^"]*LexicalTheme[^"]*"[^>]*>[\s\S]*?<\/p>/g
                     ];
                     let protectedText = String(text || '');
+                    let protectionCount = 0;
                     for (const re of patterns) {
-                        protectedText = protectedText.replace(re, (m) => { const ph = `__LOCK_${idx++}__`; placeholders[ph] = m; return ph; });
+                        protectedText = protectedText.replace(re, (m) => { 
+                            const ph = `__LOCK_${idx++}__`; 
+                            placeholders[ph] = m; 
+                            protectionCount++;
+                            return ph; 
+                        });
                     }
+                    
+                    // Debug logging
+                    if (protectionCount > 0) {
+                        console.log(`🔒 [Protection] Protected ${protectionCount} segments from AI`);
+                        console.log(`📝 [Before Protection] ${(text || '').substring(0, 150)}...`);
+                        console.log(`🔐 [After Protection] ${protectedText.substring(0, 150)}...`);
+                    }
+                    
                     return { protectedText, placeholders };
                 },
                 restoreSegments(text, placeholders) {
                     if (!placeholders) return text;
                     let out = text || '';
+                    const restoredCount = Object.keys(placeholders).length;
                     for (const [ph, val] of Object.entries(placeholders)) out = out.split(ph).join(val);
+                    
+                    // Debug logging
+                    if (restoredCount > 0) {
+                        console.log(`🔓 [Restoration] Restored ${restoredCount} protected segments`);
+                        console.log(`📤 [After Restoration] ${out.substring(0, 150)}...`);
+                    }
+                    
                     return out;
                 },
                 convertDigits(str, toArabicIndic) {
@@ -2645,6 +3053,240 @@
                     if (toArabicIndic) return (str || '').replace(/[0-9]/g, ch => ar[+ch]);
                     return (str || '').replace(/[٠-٩]/g, ch => en[ar.indexOf(ch)]);
                 },
+                
+                /**
+                 * Process all math-field tags in HTML and convert their content based on grade
+                 * This function runs AFTER translation to ensure consistent math content
+                 */
+                processMathFieldsForGrade(htmlString, ctx = { subject: 'None', grade: 'None' }) {
+                    if (!htmlString || typeof htmlString !== 'string') return htmlString;
+                    
+                    console.log('📐 [Math Field Processing - START]', {
+                        subject: ctx.subject,
+                        grade: ctx.grade,
+                        htmlLength: htmlString.length,
+                        firstChars: htmlString.substring(0, 200)
+                    });
+                    
+                    // Only process for Mathematics subject
+                    if (ctx.subject !== 'Mathematics') {
+                        console.log('⏭️ [Skipping - Not Mathematics]');
+                        return htmlString;
+                    }
+                    
+                    // Determine if we should convert based on grade
+                    const shouldConvertDigits = this.shouldConvertDigitsToArabic(ctx.subject, ctx.grade);
+                    const shouldConvertSymbols = this.shouldConvertSymbolsToArabic(ctx.subject, ctx.grade);
+                    
+                    console.log('📐 [Math Field Processing - Rules]', {
+                        subject: ctx.subject,
+                        grade: ctx.grade,
+                        convertDigits: shouldConvertDigits,
+                        convertSymbols: shouldConvertSymbols
+                    });
+                    
+                    // Count math-field tags for debugging
+                    const mathFieldMatches = htmlString.match(/<math-field[^>]*>/gi);
+                    console.log('🔢 [Found math-field tags]:', mathFieldMatches ? mathFieldMatches.length : 0);
+                    if (mathFieldMatches && mathFieldMatches.length > 0) {
+                        console.log('📋 [First math-field tag]:', mathFieldMatches[0].substring(0, 300));
+                    }
+                    
+                    // Process all math-field tags
+                    return htmlString.replace(
+                        /<math-field([^>]*)>/gi,
+                        (match, allAttrs) => {
+                            // Extract value attribute more reliably
+                            const valueMatch = allAttrs.match(/value=["']([^"']*)["']/i);
+                            
+                            if (!valueMatch) {
+                                console.log('⚠️ [No value attribute found in]:', match.substring(0, 100));
+                                return match; // Return unchanged if no value found
+                            }
+                            
+                            let processedValue = valueMatch[1];
+                            console.log('🔍 [Original math-field value]:', processedValue.substring(0, 150));
+                            
+                            // Convert digits if needed
+                            if (shouldConvertDigits) {
+                                processedValue = this.convertDigits(processedValue, true);
+                                console.log('🔢 [After digit conversion]:', processedValue.substring(0, 150));
+                            }
+                            
+                            // Convert symbols if needed
+                            if (shouldConvertSymbols) {
+                                processedValue = this.convertSymbolsToArabic(processedValue);
+                                console.log('✅ [After symbol conversion]:', processedValue.substring(0, 150));
+                            }
+                            
+                            // Rebuild the math-field tag with processed value
+                            const newAttrs = allAttrs.replace(/value=["'][^"']*["']/i, `value="${processedValue}"`);
+                            const result = `<math-field${newAttrs}>`;
+                            console.log('📦 [Final math-field]:', result.substring(0, 200));
+                            return result;
+                        }
+                    );
+                },
+                
+                /**
+                 * Determine if digits should be converted to Arabic-Indic based on subject and grade
+                 */
+
+                /**
+                 * Convert Latin mathematical symbols to Arabic equivalents
+                 * For Math Grades 1-3, 9-12
+                 */
+                convertSymbolsToArabic(str) {
+                    if (!str || typeof str !== 'string') return str;
+                    
+                    console.log('🔍 [convertSymbolsToArabic] Input:', str.substring(0, 200));
+                    
+                    // Map of common mathematical symbols (Latin → Arabic)
+                    const symbolMap = {
+                        'x': 'س',
+                        'y': 'ص', 
+                        'z': 'ع',
+                        'a': 'أ',
+                        'b': 'ب',
+                        'c': 'جـ',
+                        'd': 'د',
+                        'e': 'هـ',
+                        'f': 'و',
+                        'g': 'حـ',
+                        'h': 'ر',
+                        'k': 'ك',
+                        'l': 'ل',
+                        'm': 'م',
+                        'n': 'ن',
+                        'p': 'ع',
+                        'q': 'ق',
+                        'r': 'ر',
+                        's': 'جـ',
+                        't': 'ط',
+                        'u': 'ث',
+                        'v': 'ظ',
+                        'w': 'و'
+                    };
+                    
+                    const protectedElements = [];
+                    let workingStr = str;
+                    
+                    // STEP 1: Protect complete LaTeX blocks (everything between $ or $$)
+                    workingStr = workingStr.replace(/\$\$[\s\S]*?\$\$|\$[^$]*?\$/g, (match) => {
+                        const index = protectedElements.length;
+                        protectedElements.push(match);
+                        return `__LATEX_BLOCK_${index}__`;
+                    });
+                    
+                    console.log('🔒 [After protecting LaTeX blocks]:', workingStr.substring(0, 200));
+                    
+                    // STEP 2: Protect complete <math-field> tags
+                    workingStr = workingStr.replace(/<math-field[^>]*>[\s\S]*?<\/math-field>/g, (match) => {
+                        const index = protectedElements.length;
+                        protectedElements.push(match);
+                        return `__MATH_FIELD_${index}__`;
+                    });
+                    
+                    console.log('🔒 [After protecting math-field tags]:', workingStr.substring(0, 200));
+                    
+                    // STEP 3: Protect LaTeX commands (e.g., \begin, \end, \textrm, etc.)
+                    workingStr = workingStr.replace(/\\[a-zA-Z]+/g, (match) => {
+                        const index = protectedElements.length;
+                        protectedElements.push(match);
+                        return `__LATEX_CMD_${index}__`;
+                    });
+                    
+                    // STEP 4: Protect content inside curly braces ONLY for structural commands
+                    // (NOT for \displaystyle, \text, \textrm - those need variable conversion)
+                    workingStr = workingStr.replace(/__LATEX_CMD_(\d+)__\s*\{([^}]+)\}/g, (match, cmdIndex, content) => {
+                        // Get the actual command
+                        const cmd = protectedElements[parseInt(cmdIndex)];
+                        
+                        // Only protect content for structural commands (begin, end, etc.)
+                        const structuralCommands = ['\\begin', '\\end'];
+                        
+                        if (structuralCommands.includes(cmd)) {
+                            const contentIndex = protectedElements.length;
+                            protectedElements.push(`{${content}}`);
+                            return `__LATEX_CMD_${cmdIndex}____LATEX_CONTENT_${contentIndex}__`;
+                        }
+                        
+                        // For other commands (displaystyle, text, etc.), keep the braces but don't protect the content
+                        return `__LATEX_CMD_${cmdIndex}__{${content}}`;
+                    });
+                    
+                    // STEP 5: Protect environment names (e.g., {pmatrix}, {align})
+                    workingStr = workingStr.replace(/\{([a-zA-Z]+)\}/g, (match, envName) => {
+                        // Check if this is a LaTeX environment name (common ones)
+                        const envNames = ['pmatrix', 'bmatrix', 'vmatrix', 'matrix', 'align', 'cases', 'dcases', 
+                                         'equation', 'array', 'split', 'gather', 'multline', 'alignat'];
+                        if (envNames.includes(envName)) {
+                            const index = protectedElements.length;
+                            protectedElements.push(match);
+                            return `__LATEX_ENV_${index}__`;
+                        }
+                        return match;
+                    });
+                    
+                    // STEP 6: Protect common mathematical function names
+                    const protectedTerms = ['det', 'lim', 'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+                                          'log', 'ln', 'exp', 'sqrt', 'frac', 'sum', 'prod', 'int',
+                                          'max', 'min', 'abs', 'gcd', 'lcm', 'mod', 'dim', 'ker',
+                                          'arg', 'deg', 'hom', 'inf', 'sup', 'text', 'textrm'];
+                    
+                    protectedTerms.forEach(term => {
+                        const regex = new RegExp(`\\b${term}\\b`, 'g');
+                        workingStr = workingStr.replace(regex, (match) => {
+                            const index = protectedElements.length;
+                            protectedElements.push(match);
+                            return `__FUNC_${index}__`;
+                        });
+                    });
+                    
+                    console.log('🔒 [After protecting all LaTeX]:', workingStr.substring(0, 200));
+                    console.log('📦 [Protected elements count]:', protectedElements.length);
+                    
+                    // STEP 7: Now convert ONLY standalone single-letter variables
+                    let result = workingStr;
+                    
+                    for (const [latin, arabic] of Object.entries(symbolMap)) {
+                        // Match single letter that is:
+                        // - NOT preceded by backslash, letter, or underscore
+                        // - NOT followed by letter or underscore
+                        // - NOT part of a placeholder
+                        const regex = new RegExp(
+                            `(?<!\\\\)(?<![a-zA-Z_])(?<!__)${latin}(?![a-zA-Z_])(?!__)`,
+                            'g'
+                        );
+                        result = result.replace(regex, arabic);
+                    }
+                    
+                    console.log('✏️ [After symbol conversion]:', result.substring(0, 200));
+                    
+                    // STEP 8: Restore all protected elements in reverse order
+                    for (let i = protectedElements.length - 1; i >= 0; i--) {
+                        const placeholderPatterns = [
+                            `__LATEX_BLOCK_${i}__`,
+                            `__MATH_FIELD_${i}__`,
+                            `__LATEX_CMD_${i}__`,
+                            `__LATEX_CONTENT_${i}__`,
+                            `__LATEX_ENV_${i}__`,
+                            `__FUNC_${i}__`
+                        ];
+                        
+                        for (const pattern of placeholderPatterns) {
+                            if (result.includes(pattern)) {
+                                result = result.replace(new RegExp(pattern, 'g'), protectedElements[i]);
+                            }
+                        }
+                    }
+                    
+                    console.log('🔓 [After restoring protected elements]:', result.substring(0, 200));
+                    console.log('✅ [convertSymbolsToArabic] Output:', result.substring(0, 200));
+                    
+                    return result;
+                },
+                
                 normalizeArabicPunct(str) {
                     return (str || '')
                         .replace(/ ,/g, '،')
@@ -2723,24 +3365,696 @@
                         return htmlString;
                     }
                 },
+                
+                // Enhanced translation quality fixes based on comprehensive testing
+                fixTranslationIssues(text, ctx = { subject: 'None', grade: 'None' }) {
+                    let out = text || '';
+                    
+                    // 1. Fix broken HTML entities (3 types)
+                    out = out.replace(/&amp;amp;/g, '&amp;');
+                    out = out.replace(/&amp;lt;/g, '&lt;');
+                    out = out.replace(/&amp;gt;/g, '&gt;');
+                    
+                    // 2. Fix LaTeX commands consistency
+                    out = out.replace(/\\textrm\s*\{([^}]+)\}/g, '\\text{$1}');
+                    
+                    // 3. Fix mixed numbers in math-field (English/Arabic)
+                    if (this.wantsArabicIndicDigits(ctx.subject, ctx.grade)) {
+                        out = out.replace(/<math-field([^>]*value="[^"]*)([0-9]+)([^"]*")/g, (match, before, digits, after) => {
+                            const arabicDigits = digits.replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)]);
+                            return match.replace(digits, arabicDigits);
+                        });
+                    }
+                    
+                    // 4. Fix English variables in Arabic context (in math-field only)
+                    if (this.wantsArabicIndicDigits(ctx.subject, ctx.grade)) {
+                        const variableMap = {
+                            'x': 'س', 'y': 'ص', 'z': 'ع', 'a': 'أ', 'b': 'ب', 'c': 'جـ',
+                            'd': 'د', 'f': 'و', 'g': 'ز', 'h': 'ح', 'k': 'ك',
+                            'l': 'ل', 'm': 'م', 'n': 'ن', 'p': 'ع', 'q': 'ق', 'r': 'ر',
+                            't': 'ت', 'v': 'ف', 'w': 'و'
+                        };
+                        
+                        out = out.replace(/<math-field([^>]*value=["'])([^"']*)((["'][^>]*)>)([^<]*)<\/math-field>/g, 
+                            (match, before, valueAttr, middle, afterValue, innerContent) => {
+                                
+                                // Fix value attribute
+                                let fixedValue = valueAttr;
+                                Object.entries(variableMap).forEach(([en, ar]) => {
+                                    const regex = new RegExp(`(?<!\\\\[a-zA-Z]*)(?<![a-zA-Z])${en}(?![a-zA-Z])`, 'g');
+                                    fixedValue = fixedValue.replace(regex, ar);
+                                });
+                                
+                                // Fix inner content
+                                let fixedInner = innerContent;
+                                Object.entries(variableMap).forEach(([en, ar]) => {
+                                    const regex = new RegExp(`(?<!\\\\[a-zA-Z]*)(?<![a-zA-Z])${en}(?![a-zA-Z])`, 'g');
+                                    fixedInner = fixedInner.replace(regex, ar);
+                                });
+                                
+                                return `<math-field${before}${fixedValue}${middle}${fixedInner}</math-field>`;
+                            });
+                    }
+                    
+                    // 5. Fix punctuation in plain text (not inside HTML tags)
+                    out = out.replace(/(?<!<[^>]*)([.!?])\s*([.!?])/g, '$1$2');
+                    out = out.replace(/(?<!<[^>]*)([.!?])\s*([.!?])\s*([.!?])/g, '$1$2$3');
+                    
+                    // 6. Fix reversed cases/dcases columns
+                    out = out.replace(/\\begin\{(cases|dcases)\}([^}]+)\\\\([^}]+)\\end\{(cases|dcases)\}/g, 
+                        (match, beginType, col1, col2, endType) => {
+                            return `\\begin{${beginType}}${col2}\\\\${col1}\\end{${endType}}`;
+                        });
+                    
+                    return out;
+                },
+                
+                // Sync math-field content with value attribute
+                syncMathFieldContent(htmlString) {
+                    if (!htmlString || typeof htmlString !== 'string') return htmlString;
+                    
+                    return htmlString.replace(/<math-field([^>]*value="([^"]*)"[^>]*)>([^<]*)<\/math-field>/g, 
+                        (match, attributes, value, innerContent) => {
+                            // Add locale="ar" if not present
+                            if (!attributes.includes('locale=')) {
+                                attributes = attributes + ' locale="ar"';
+                            }
+                            
+                            // If inner content is different from value, sync them
+                            if (value !== innerContent) {
+                                return `<math-field${attributes}>${value}</math-field>`;
+                            }
+                            return `<math-field${attributes}>${innerContent}</math-field>`;
+                        });
+                },
+
+                // Enhanced HTML cleaning and validation
+                cleanHtml(text) {
+                    let cleaned = text;
+
+                    // إصلاح HTML entities
+                    cleaned = cleaned.replace(/&amp;/g, '&');
+                    cleaned = cleaned.replace(/&lt;/g, '<');
+                    cleaned = cleaned.replace(/&gt;/g, '>');
+
+                    // إصلاح توازن HTML tags
+                    cleaned = this.fixHtmlTagBalance(cleaned);
+
+                    return cleaned;
+                },
+
+                // Fix HTML tag balance
+                fixHtmlTagBalance(text) {
+                    const openTags = (text.match(/</g) || []).length;
+                    const closeTags = (text.match(/>/g) || []).length;
+
+                    if (openTags !== closeTags) {
+                        if (openTags > closeTags) {
+                            text += '>'.repeat(openTags - closeTags);
+                        } else if (closeTags > openTags) {
+                            text = '<'.repeat(closeTags - openTags) + text;
+                        }
+                    }
+
+                    return text;
+                },
+
+                // Fix mixed numbers in math-field content
+                fixMixedNumbersInMathFields(text, grade) {
+                    if (!/[أ-ي]/.test(text)) return text;
+                    
+                    const arabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+                    if (!arabicGrades.includes(grade)) return text;
+                    
+                    let fixed = text;
+                    
+                    // Only fix inside math-field tags
+                    fixed = fixed.replace(/<math-field([^>]*value=["'])([^"']*)((["'][^>]*)>)([^<]*)<\/math-field>/g, 
+                        (match, before, valueAttr, middle, afterValue, innerContent) => {
+                            
+                            // Fix value attribute
+                            let fixedValue = this.convertDigitsInMathContent(valueAttr);
+                            
+                            // Fix inner content
+                            let fixedInner = this.convertDigitsInMathContent(innerContent);
+                            
+                            return `<math-field${before}${fixedValue}${middle}${fixedInner}</math-field>`;
+                        });
+                    
+                    return fixed;
+                },
+
+                // Convert digits in math content
+                convertDigitsInMathContent(content) {
+                    const digitMap = {
+                        '0': '٠', '1': '١', '2': '٢', '3': '٣', '4': '٤',
+                        '5': '٥', '6': '٦', '7': '٧', '8': '٨', '9': '٩'
+                    };
+                    
+                    let fixed = content;
+                    
+                    // Convert digits (but be careful not to break LaTeX commands)
+                    Object.entries(digitMap).forEach(([en, ar]) => {
+                        const regex = new RegExp(`(?<!\\\\[a-zA-Z]*)(?<![a-zA-Z])${en}(?![a-zA-Z])`, 'g');
+                        fixed = fixed.replace(regex, ar);
+                    });
+                    
+                    return fixed;
+                },
+
+                // Fix English variables in math-field content
+                fixEnglishVariablesInMathFields(text, grade) {
+                    if (!/[أ-ي]/.test(text)) return text;
+                    
+                    const arabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+                    if (!arabicGrades.includes(grade)) return text;
+                    
+                    let fixed = text;
+                    
+                    // Only fix inside math-field tags
+                    fixed = fixed.replace(/<math-field([^>]*value=["'])([^"']*)((["'][^>]*)>)([^<]*)<\/math-field>/g, 
+                        (match, before, valueAttr, middle, afterValue, innerContent) => {
+                            
+                            // Fix value attribute
+                            let fixedValue = this.convertVariablesInMathContent(valueAttr);
+                            
+                            // Fix inner content
+                            let fixedInner = this.convertVariablesInMathContent(innerContent);
+                            
+                            return `<math-field${before}${fixedValue}${middle}${fixedInner}</math-field>`;
+                        });
+                    
+                    return fixed;
+                },
+
+                // Convert variables in math content
+                convertVariablesInMathContent(content) {
+                    const variableMap = {
+                        'x': 'س', 'y': 'ص', 'z': 'ع', 'a': 'أ', 'b': 'ب', 'c': 'جـ',
+                        'd': 'د', 'f': 'و', 'g': 'ز', 'h': 'ح', 'k': 'ك',
+                        'l': 'ل', 'm': 'م', 'n': 'ن', 'p': 'ع', 'q': 'ق', 'r': 'ر',
+                        't': 'ت', 'v': 'ف', 'w': 'و'
+                    };
+                    
+                    let fixed = content;
+                    
+                    // Convert variables (but be careful not to break LaTeX commands)
+                    Object.entries(variableMap).forEach(([en, ar]) => {
+                        const regex = new RegExp(`(?<!\\\\[a-zA-Z]*)(?<![a-zA-Z])${en}(?![a-zA-Z])`, 'g');
+                        fixed = fixed.replace(regex, ar);
+                    });
+                    
+                    return fixed;
+                },
+
+                // Fix punctuation in plain text
+                fixWrongPunctuation(text) {
+                    if (!/[أ-ي]/.test(text)) return text;
+                    
+                    let fixed = text;
+                    
+                    // Split by HTML tags to preserve them
+                    const parts = fixed.split(/(<[^>]+>)/g);
+                    
+                    fixed = parts.map((part, index) => {
+                        // If it's an HTML tag, don't touch it
+                        if (part.startsWith('<')) {
+                            return part;
+                        }
+                        
+                        // Otherwise, fix punctuation
+                        let fixedPart = part;
+                        
+                        // Convert punctuation (but preserve HTML entities)
+                        fixedPart = fixedPart.replace(/(?<!&[#a-zA-Z0-9]*),/g, '،');  // comma
+                        fixedPart = fixedPart.replace(/(?<!&[#a-zA-Z0-9]*);/g, '؛');  // semicolon
+                        fixedPart = fixedPart.replace(/(?<!&[#a-zA-Z0-9]*)\?/g, '؟'); // question mark
+                        
+                        return fixedPart;
+                    }).join('');
+                    
+                    return fixed;
+                },
+
+                // Check translation quality
+                checkTranslationQuality(originalText, translatedText) {
+                    const issues = [];
+
+                    // فحص وجود أرقام إنجليزية
+                    const englishNumbers = /[0-9]/g;
+                    if (englishNumbers.test(translatedText)) {
+                        issues.push('يحتوي على أرقام إنجليزية');
+                    }
+
+                    // فحص وجود رموز رياضية إنجليزية
+                    const englishSymbols = /[x,y,z]/g;
+                    if (englishSymbols.test(translatedText)) {
+                        issues.push('يحتوي على رموز رياضية إنجليزية');
+                    }
+
+                    // فحص طول النص
+                    const originalLength = originalText.length;
+                    const translatedLength = translatedText.length;
+                    const lengthRatio = translatedLength / originalLength;
+
+                    if (lengthRatio < 0.5) {
+                        issues.push('النص المترجم قصير جداً');
+                    } else if (lengthRatio > 2) {
+                        issues.push('النص المترجم طويل جداً');
+                    }
+
+                    return {
+                        quality: issues.length === 0 ? 'good' : 'poor',
+                        issues: issues,
+                        score: Math.max(0, 100 - (issues.length * 20))
+                    };
+                },
+
+                // Improve translation
+                improveTranslation(originalText, translatedText) {
+                    let improved = translatedText;
+
+                    // تحويل الأرقام الإنجليزية إلى عربية
+                    improved = this.convertEnglishNumbersToArabic(improved);
+
+                    // ترجمة الرموز الرياضية
+                    improved = this.translateMathSymbols(improved);
+
+                    // ترجمة المصطلحات الرياضية
+                    improved = this.translateMathTerms(improved);
+
+                    return improved;
+                },
+
+                // Convert English numbers to Arabic
+                convertEnglishNumbersToArabic(text) {
+                    const numberMap = {
+                        '0': '٠', '1': '١', '2': '٢', '3': '٣', '4': '٤',
+                        '5': '٥', '6': '٦', '7': '٧', '8': '٨', '9': '٩'
+                    };
+
+                    let converted = text;
+                    Object.entries(numberMap).forEach(([english, arabic]) => {
+                        converted = converted.replace(new RegExp(english, 'g'), arabic);
+                    });
+
+                    return converted;
+                },
+
+                // Translate math symbols
+                translateMathSymbols(text) {
+                    const symbolMap = {
+                        // Variables
+                        'x': 'س', 'y': 'ص', 'z': 'ع',
+                        'a': 'أ', 'b': 'ب', 'c': 'جـ',
+                        'd': 'د', 'e': 'هـ', 'f': 'و',
+                        'g': 'ز', 'h': 'ح', 'i': 'ط',
+                        'j': 'ي', 'k': 'ك', 'l': 'ل',
+                        'm': 'م', 'n': 'ن', 'p': 'ع',
+                        'q': 'ق', 'r': 'ر', 's': 'س',
+                        't': 'ت', 'u': 'ش', 'v': 'ظ',
+                        'w': 'و'
+                    };
+
+                    let translated = text;
+                    Object.entries(symbolMap).forEach(([english, arabic]) => {
+                        // Use word boundaries to avoid replacing inside LaTeX commands
+                        translated = translated.replace(new RegExp(`\\b${english}\\b`, 'g'), arabic);
+                    });
+
+                    return translated;
+                },
+
+                // Translate math terms
+                translateMathTerms(text) {
+                    const termMap = {
+                        // Trigonometric functions
+                        'sin': 'جا', 'cos': 'جتا', 'tan': 'ظا',
+                        'cot': 'ظتا', 'sec': 'قا', 'csc': 'قتا',
+                        'arcsin': 'جا⁻¹', 'arccos': 'جتا⁻¹', 'arctan': 'ظا⁻¹',
+                        'sinh': 'جاز', 'cosh': 'جتاز', 'tanh': 'ظاز',
+                        
+                        // Logarithmic functions
+                        'log': 'لو', 'ln': 'لو', 'lg': 'لو',
+                        'exp': 'هـ',
+                        
+                        // Matrix operations
+                        'det': 'محدد', 'matrix': 'مصفوفة', 'vector': 'متجه',
+                        'transpose': 'منقول', 'inverse': 'معكوس',
+                        'determinant': 'المحدد', 'trace': 'الأثر',
+                        'rank': 'الرتبة', 'dimension': 'البعد',
+                        
+                        // Calculus terms
+                        'function': 'دالة', 'derivative': 'مشتق', 'integral': 'تكامل',
+                        'limit': 'نهاية', 'sum': 'مجموع', 'product': 'حاصل ضرب',
+                        'differential': 'تفاضل', 'gradient': 'تدرج',
+                        'divergence': 'تباعد', 'curl': 'دوران',
+                        
+                        // Set theory
+                        'set': 'مجموعة', 'subset': 'مجموعة جزئية',
+                        'union': 'اتحاد', 'intersection': 'تقاطع',
+                        'element': 'عنصر', 'complement': 'متمم',
+                        
+                        // Geometry
+                        'angle': 'زاوية', 'triangle': 'مثلث', 'circle': 'دائرة',
+                        'square': 'مربع', 'rectangle': 'مستطيل',
+                        'polygon': 'مضلع', 'sphere': 'كرة', 'cylinder': 'أسطوانة',
+                        'cone': 'مخروط', 'pyramid': 'هرم',
+                        'radius': 'نصف القطر', 'diameter': 'القطر',
+                        'perimeter': 'المحيط', 'area': 'المساحة', 'volume': 'الحجم',
+                        
+                        // Algebra
+                        'equation': 'معادلة', 'inequality': 'متباينة',
+                        'expression': 'مقدار', 'polynomial': 'كثير حدود',
+                        'coefficient': 'معامل', 'constant': 'ثابت',
+                        'variable': 'متغير', 'exponent': 'أس',
+                        'root': 'جذر', 'sqrt': 'جذر', 'square root': 'الجذر التربيعي',
+                        'cube root': 'الجذر التكعيبي',
+                        
+                        // Statistics & Probability
+                        'mean': 'الوسط', 'median': 'الوسيط', 'mode': 'المنوال',
+                        'variance': 'التباين', 'deviation': 'الانحراف',
+                        'probability': 'احتمال', 'distribution': 'توزيع',
+                        'sample': 'عينة', 'population': 'مجتمع',
+                        
+                        // Constants
+                        'pi': 'π', 'infinity': '∞', 'euler': 'هـ',
+                        
+                        // Operations
+                        'maximum': 'الأكبر', 'minimum': 'الأصغر',
+                        'max': 'الأكبر', 'min': 'الأصغر',
+                        'supremum': 'الحد الأعلى', 'infimum': 'الحد الأدنى',
+                        'sup': 'الحد الأعلى', 'inf': 'الحد الأدنى'
+                    };
+
+                    let translated = text;
+                    
+                    // Sort by length (longest first) to avoid partial replacements
+                    const sortedTerms = Object.entries(termMap).sort((a, b) => b[0].length - a[0].length);
+                    
+                    sortedTerms.forEach(([english, arabic]) => {
+                        // Use word boundaries for better matching
+                        const regex = new RegExp(`\\b${english}\\b`, 'gi');
+                        translated = translated.replace(regex, arabic);
+                    });
+
+                    return translated;
+                },
+
+                // Generate quality report
+                generateQualityReport(originalData, translatedData) {
+                    const report = {
+                        totalParts: 0,
+                        qualityIssues: 0,
+                        mathFieldIssues: 0,
+                        htmlIssues: 0,
+                        translationIssues: 0,
+                        recommendations: []
+                    };
+
+                    if (originalData.parts && translatedData.parts) {
+                        report.totalParts = originalData.parts.length;
+
+                        originalData.parts.forEach((originalPart, index) => {
+                            const translatedPart = translatedData.parts[index];
+                            if (!translatedPart) return;
+
+                            // فحص stem
+                            if (originalPart.stem && translatedPart.stem) {
+                                const quality = this.checkTranslationQuality(originalPart.stem, translatedPart.stem);
+                                if (quality.quality === 'poor') {
+                                    report.qualityIssues++;
+                                    report.translationIssues += quality.issues.length;
+                                }
+                            }
+
+                            // فحص الخيارات
+                            if (originalPart.choices && translatedPart.choices) {
+                                originalPart.choices.forEach((originalChoice, choiceIndex) => {
+                                    const translatedChoice = translatedPart.choices[choiceIndex];
+                                    if (!translatedChoice) return;
+
+                                    if (originalChoice.html_content && translatedChoice.html_content) {
+                                        const quality = this.checkTranslationQuality(originalChoice.html_content, translatedChoice.html_content);
+                                        if (quality.quality === 'poor') {
+                                            report.qualityIssues++;
+                                            report.translationIssues += quality.issues.length;
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
+
+                    // إنشاء التوصيات
+                    if (report.translationIssues > 0) {
+                        report.recommendations.push('تحسين ترجمة النصوص');
+                    }
+
+                    if (report.mathFieldIssues > 0) {
+                        report.recommendations.push('إصلاح مشاكل math-field');
+                    }
+
+                    if (report.htmlIssues > 0) {
+                        report.recommendations.push('إصلاح مشاكل HTML');
+                    }
+
+                    return report;
+                },
+
+                // Convert LaTeX symbols to Arabic (Advanced LaTeX Processing)
+                convertLatexSymbols(str, toArabic) {
+                    if (!str || !toArabic) return str;
+                    
+                    const symbolMap = {
+                        'x': 'س', 'y': 'ص', 'z': 'ع', 'a': 'أ', 'b': 'ب', 'c': 'جـ', 
+                        'd': 'د', 'f': 'و', 'g': 'ز', 'h': 'ح', 'k': 'ك',
+                        'l': 'ل', 'm': 'م', 'n': 'ن', 'p': 'ع', 'q': 'ق', 'r': 'ر',
+                        't': 'ت', 'v': 'ف', 'w': 'و'
+                    };
+                    
+                    // Process LaTeX blocks ($..$ and $$...$$)
+                    return str.replace(/(\$\$?)([\s\S]*?)(\$\$?)/g, (match, open, content, close) => {
+                        let converted = this.convertDigits(content, true);
+                        
+                        // Convert standalone variables (not part of LaTeX commands)
+                        converted = converted.replace(/(?<!\\)(?<![a-zA-Z])([a-zA-Z])(?![a-zA-Z])/g, (m, letter) => {
+                            const prev = converted.charAt(converted.indexOf(m) - 1);
+                            if (prev === '\\') return letter;
+                            return symbolMap[letter.toLowerCase()] || letter;
+                        });
+                        
+                        // Reverse columns in cases/dcases for RTL
+                        converted = converted.replace(/\\begin\{(d?cases)\}([\s\S]*?)\\end\{\1\}/g, (caseMatch, envType, caseContent) => {
+                            const processed = caseContent.replace(/(.*?)(&amp;|&)(.*?)(\\\\|(?=\n)|$)/g, (rowMatch, left, amp, right, ending) => {
+                                if (left.trim() || right.trim()) {
+                                    return `${right.trim()} ${amp} ${left.trim()}${ending}`;
+                                }
+                                return rowMatch;
+                            });
+                            return `\\begin{${envType}}${processed}\\end{${envType}}`;
+                        });
+                        
+                        return open + converted + close;
+                    });
+                },
+
+                // Reverse cases/dcases columns for RTL (Advanced LaTeX Processing)
+                reverseCasesColumns(str, ctx = { subject: 'None', grade: 'None' }) {
+                    const mathArabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+                    if (ctx.subject === 'Mathematics' && mathArabicGrades.includes(ctx.grade)) {
+                        let result = str || '';
+                        
+                        // Reverse columns in cases/dcases environment
+                        result = result.replace(/\\begin\{(d?cases)\}([\s\S]*?)\\end\{\1\}/g, (match, envType, content) => {
+                            const processed = content.replace(/(.*?)(&amp;|&)(.*?)(\\\\|(?=\n)|$)/g, (rowMatch, left, amp, right, ending) => {
+                                if (left.trim() || right.trim()) {
+                                    return `${right.trim()} ${amp} ${left.trim()}${ending}`;
+                                }
+                                return rowMatch;
+                            });
+                            
+                            return `\\begin{${envType}}${processed}\\end{${envType}}`;
+                        });
+                        
+                        return result;
+                    }
+                    return str;
+                },
+
+                // Convert math field content with LaTeX support (Advanced LaTeX Processing)
+                convertMathFieldContent(htmlString, toArabic) {
+                    if (!htmlString || typeof htmlString !== 'string' || !toArabic) return htmlString;
+                    
+                    const symbolMap = {
+                        'x': 'س', 'y': 'ص', 'z': 'ع', 'a': 'أ', 'b': 'ب', 'c': 'جـ',
+                        'd': 'د', 'f': 'و', 'g': 'ز', 'h': 'ح', 'k': 'ك',
+                        'l': 'ل', 'm': 'م', 'n': 'ن', 'p': 'ع', 'q': 'ق', 'r': 'ر',
+                        't': 'ت', 'v': 'ف', 'w': 'و'
+                    };
+                    
+                    const convertLatex = (latex) => {
+                        let result = this.convertDigits(latex, true);
+                        
+                        // Convert variables (not part of LaTeX commands)
+                        Object.entries(symbolMap).forEach(([en, ar]) => {
+                            const regex = new RegExp(`(?<!\\\\[a-zA-Z]*)(?<![a-zA-Z])${en}(?![a-zA-Z])`, 'g');
+                            result = result.replace(regex, ar);
+                        });
+                        
+                        return result;
+                    };
+                    
+                    return htmlString.replace(/<math-field([^>]*value=["'])([^"']*)((["'][^>]*)>)([^<]*)<\/math-field>/g, 
+                        (match, before, valueAttr, middle, afterValue, innerContent) => {
+                        
+                        // Decode, convert, and encode value attribute
+                        let decodedValue = valueAttr.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+                        decodedValue = convertLatex(decodedValue);
+                        const encodedValue = decodedValue.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                        
+                        // Decode, convert, and encode inner content
+                        let decodedInner = innerContent.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+                        decodedInner = convertLatex(decodedInner);
+                        const encodedInner = decodedInner.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                        
+                        return `<math-field${before}${encodedValue}${middle}${encodedInner}</math-field>`;
+                    });
+                },
+                
                 postProcess(text, ctx = { subject: 'None', grade: 'None' }) {
                     let out = text || '';
-                    // Add a new rule to replace the remainder symbol
-                    out = out.replace(/R\s*(\d+)/g, ' والباقي $1');
+                    
+                    // 🔍 Debug: Log the current context
+                    if (ctx.subject === 'Mathematics') {
+                        console.log('📊 [Math PostProcess]', {
+                            subject: ctx.subject,
+                            grade: ctx.grade,
+                            willConvertSymbols: ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].includes(ctx.grade),
+                            sampleText: text ? text.substring(0, 100) : 'empty'
+                        });
+                    }
+                    
+                    // Add a new rule to replace the remainder symbol
+                    out = out.replace(/R\s*(\d+)/g, ' والباقي $1');
                     
                     // Convert "and" to comma for specific grades
                     out = this.convertAndToComma(out, ctx);
                     
-                    const toArabic = this.wantsArabicIndicDigits(ctx.subject, ctx.grade);
-                    out = this.convertDigits(out, toArabic);
+                    const toArabic = this.wantsArabicIndicDigits(ctx.subject, ctx.grade);
+                    
+                    // Convert digits
+                    console.log('🔢 [Digit Conversion] Subject:', ctx.subject, 'Grade:', ctx.grade, 'toArabic:', toArabic);
+                    if (toArabic) {
+                        console.log('🔍 [Before Digit Conversion]:', out.substring(0, 100));
+                        out = this.convertDigits(out, toArabic);
+                        console.log('🔍 [After Digit Conversion]:', out.substring(0, 100));
+                    } else {
+                        console.log('⚠️ [Digit Conversion] Skipping - Subject/Grade not in Arabic list');
+                    }
+                    
+                    // Advanced LaTeX Processing: Convert LaTeX symbols and reverse cases/dcases
+                    if (toArabic && ctx.subject === 'Mathematics') {
+                        console.log('✅ [Advanced LaTeX] Processing LaTeX symbols and cases/dcases');
+                        out = this.convertMathFieldContent(out, toArabic);
+                        out = this.convertLatexSymbols(out, toArabic);
+                        out = this.reverseCasesColumns(out, ctx);
+                    }
+                    
+                    // Convert symbols to Arabic for specific grades (after LaTeX processing)
+                    const arabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+                    if (ctx.subject === 'Mathematics' && arabicGrades.includes(ctx.grade)) {
+                        console.log('✅ [Symbol Conversion] Converting symbols for grade:', ctx.grade);
+                        console.log('🔍 [Before Symbol Conversion]:', out.substring(0, 100));
+                        out = this.convertSymbolsToArabic(out);
+                        console.log('🔍 [After Symbol Conversion]:', out.substring(0, 100));
+                    } else if (ctx.subject === 'Mathematics') {
+                        console.log('⚠️ [Symbol Conversion] Skipping - Grade not in Arabic list:', ctx.grade);
+                    }
+                    
                     out = this.enforceUnits(out, ctx);
-                    out = this.normalizeArabicPunct(out);
-                    out = out.replace(/»([^»«]+)»/g, '«$1»');
+                    out = this.normalizeArabicPunct(out);
+                    out = out.replace(/»([^»«]+)»/g, '«$1»');
+                    
+                    // Process math-field tags to convert their content
+                    out = this.processMathFieldContent(out, ctx);
                     
                     // Ensure RTL direction for Arabic content
                     out = this.ensureRTLDirection(out);
                     
-                    return out;
+                    // Enhanced fixes for mixed numbers and variables
+                    if (ctx.subject === 'Mathematics' && arabicGrades.includes(ctx.grade)) {
+                        out = this.fixMixedNumbersInMathFields(out, ctx.grade);
+                        out = this.fixEnglishVariablesInMathFields(out, ctx.grade);
+                        
+                        // Additional symbol conversion for math-field content
+                        out = out.replace(/<math-field([^>]*value="[^"]*")([^>]*)>([^<]*)<\/math-field>/g, 
+                            (match, before, middle, innerContent) => {
+                                // Convert symbols in inner content
+                                let convertedInner = this.convertSymbolsToArabic(innerContent);
+                                return `<math-field${before}${middle}>${convertedInner}</math-field>`;
+                            });
+                    }
+                    
+                    // Fix punctuation
+                    out = this.fixWrongPunctuation(out);
+                    
+                    // Clean HTML
+                    out = this.cleanHtml(out);
+                    
+                    // Final cleanup: fix any remaining issues discovered in testing
+                    out = this.fixTranslationIssues(out, ctx);
+                    
+                    // Sync math-field content with value attribute
+                    out = this.syncMathFieldContent(out);
+                    
+                    return out;
+                },                /**
+                 * Process math-field tags and convert their value content based on grade rules
+                 * For Math G1-3, G9-12: Convert to Arabic digits with RTL direction
+                 * For Math G4-8: Keep English digits with LTR direction
+                 */
+                processMathFieldContent(htmlString, ctx = { subject: 'None', grade: 'None' }) {
+                    if (!htmlString || typeof htmlString !== 'string') return htmlString;
+                    if (ctx.subject !== 'Mathematics') return htmlString;
+                    
+                    const arabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+                    const shouldConvertToArabic = arabicGrades.includes(ctx.grade);
+                    
+                    return htmlString.replace(/<math-field([^>]*)value="([^"]*)"([^>]*)>([^<]*)<\/math-field>/g, 
+                        (match, before, value, after, innerContent) => {
+                        if (!value) return match;
+                        
+                        let processedValue = value;
+                        let processedInner = innerContent;
+                        
+                        if (shouldConvertToArabic) {
+                            // Convert English digits (0-9) to Arabic digits (٠-٩)
+                            processedValue = this.convertDigits(processedValue, true);
+                            processedInner = this.convertDigits(processedInner, true);
+                            
+                            // Convert Latin symbols (x, y, z) to Arabic (س, ص, ع)
+                            processedValue = this.convertSymbolsToArabic(processedValue);
+                            processedInner = this.convertSymbolsToArabic(processedInner);
+                            
+                            // Ensure dir="rtl" for Arabic grades
+                            if (!after.includes('dir=')) {
+                                after = ' dir="rtl"' + after;
+                            } else {
+                                after = after.replace(/dir="ltr"/, 'dir="rtl"');
+                            }
+                        } else {
+                            // Keep English digits for G4-8
+                            // Ensure dir="ltr" 
+                            if (!after.includes('dir=')) {
+                                after = ' dir="ltr"' + after;
+                            } else {
+                                after = after.replace(/dir="rtl"/, 'dir="ltr"');
+                            }
+                        }
+                        
+                        return `<math-field${before}value="${processedValue}"${after}>${processedInner}</math-field>`;
+                    });
                 },
                 qa: {
                     extractPlain(html) { const div = document.createElement('div'); div.innerHTML = html || ''; return (div.textContent || div.innerText || '').trim(); },
@@ -3199,9 +4513,63 @@
                         TranslatorApp.dom.gradeSelect.appendChild(opt);
                     });
                 },
-                onSubjectChange() { const s = TranslatorApp.dom.subjectSelect.value; this.populateGrades(s); this.updatePromptPreview(); },
-                onGradeChange() { this.updatePromptPreview(); },
+                onSubjectChange() { 
+                    const s = TranslatorApp.dom.subjectSelect.value; 
+                    this.populateGrades(s); 
+                    this.updatePromptPreview();
+                    this.updateMathGradeWarning();
+                },
+                onGradeChange() { 
+                    this.updatePromptPreview();
+                    this.updateMathGradeWarning();
+                },
                 updatePromptPreview() { TranslatorApp.dom.promptPreview.value = this.buildSystemPrompt(); },
+                
+                /**
+                 * Show warning for Mathematics based on selected grade
+                 */
+                updateMathGradeWarning() {
+                    const warningDiv = document.getElementById('mathGradeWarning');
+                    const warningText = document.getElementById('mathGradeWarningText');
+                    
+                    if (!warningDiv || !warningText) return;
+                    
+                    const subject = TranslatorApp.dom.subjectSelect.value;
+                    const grade = TranslatorApp.dom.gradeSelect.value;
+                    
+                    if (subject === 'Mathematics' && grade && grade !== 'None') {
+                        const arabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+                        
+                        if (arabicGrades.includes(grade)) {
+                            // ✅ Grade will use Arabic conversion
+                            warningDiv.style.display = 'block';
+                            warningDiv.style.backgroundColor = '#d4edda';
+                            warningDiv.style.borderColor = '#28a745';
+                            warningText.style.color = '#155724';
+                            warningText.innerHTML = `
+                                ✅ <strong>${grade}</strong> - سيتم تحويل:<br>
+                                • الأرقام: 0-9 → ٠-٩<br>
+                                • الرموز: x,y,z → س,ص,ع<br>
+                                • الاتجاه: RTL (من اليمين لليسار)
+                            `;
+                        } else {
+                            // ⚠️ Grade will keep English
+                            warningDiv.style.display = 'block';
+                            warningDiv.style.backgroundColor = '#fff3cd';
+                            warningDiv.style.borderColor = '#ffc107';
+                            warningText.style.color = '#856404';
+                            warningText.innerHTML = `
+                                ℹ️ <strong>${grade}</strong> - سيتم الحفاظ على:<br>
+                                • الأرقام بالإنجليزية: 0-9<br>
+                                • الرموز بالإنجليزية: x,y,z<br>
+                                • الاتجاه: LTR (من اليسار لليمين)<br>
+                                <small>(عدا الوحدات مثل cm → سم)</small>
+                            `;
+                        }
+                    } else {
+                        warningDiv.style.display = 'none';
+                    }
+                },
                 getCurrentPrompt() {
                     const subject = TranslatorApp.dom.subjectSelect.value;
                     const grade = TranslatorApp.dom.gradeSelect.value;
@@ -3286,6 +4654,16 @@
                     
                     if (subjectName !== 'None' && gradeName !== 'None') {
                         message += `\nسيتم جلب المصطلحات المخصصة لهذا الجريد عند الترجمة.`;
+                        
+                        // ⚠️ Special warning for Mathematics with specific grades
+                        if (subjectName === 'Mathematics') {
+                            const arabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+                            if (arabicGrades.includes(gradeName)) {
+                                message += `\n✅ سيتم تحويل الأرقام والرموز (x,y,z) للعربية تلقائياً.`;
+                            } else {
+                                message += `\n⚠️ ملاحظة: ${gradeName} سيبقي الأرقام والرموز بالإنجليزية.`;
+                            }
+                        }
                     }
                     
                     TranslatorApp.ui.showAlert(message, 'success', 5000);
@@ -3295,6 +4673,7 @@
                     this.populateGrades(TranslatorApp.state.selectedSubject);
                     TranslatorApp.dom.gradeSelect.value = TranslatorApp.state.selectedGrade;
                     this.updatePromptPreview();
+                    this.updateMathGradeWarning();
                 }
             },
 
@@ -3737,6 +5116,14 @@
                     });
             
                     if (jobsToTranslate.length > 0) {
+                        // 🔍 Debug: Log translation context
+                        console.log('🚀 [Translation Start]', {
+                            subject: this.state.selectedSubject,
+                            grade: this.state.selectedGrade,
+                            jobCount: jobsToTranslate.length,
+                            isGradeSelected: this.state.selectedGrade !== 'None'
+                        });
+                        
                         this.ui.updateProgress(`جاري ترجمة ${jobsToTranslate.length} نص جديد...`);
                         const systemPrompt = this.subjects.buildSystemPrompt();
                         await this.api.translateInChunks(jobsToTranslate, apiKeyOrUrl, apiProvider, localModelName, systemPrompt);
@@ -3759,6 +5146,14 @@
                         let cleanedHtml = TranslatorApp.quality.cleanLatexArabic(finalHtml);
                         // Ensure RTL direction for Arabic content
                         cleanedHtml = TranslatorApp.quality.ensureRTLDirection(cleanedHtml);
+                        
+                        // Process math-field tags for grade-specific conversions
+                        const ctx = {
+                            subject: this.state.selectedSubject,
+                            grade: this.state.selectedGrade
+                        };
+                        cleanedHtml = this.quality.processMathFieldsForGrade(cleanedHtml, ctx);
+                        
                         const { fileIndex, partIndex, choiceIndex, key, keyIndex, subKey, answerIndex, isArray } = pointer;
                         let target = this.state.translatedJsonData[fileIndex].data;
             
@@ -4053,6 +5448,27 @@
             preview: {
                 dmp: new diff_match_patch(),
 
+                /* // <--- تعطيل دالة processMathFieldTags الأولى
+                processMathFieldTags(htmlString) {
+                    if (!htmlString || typeof htmlString !== 'string') return htmlString;
+                    
+                    // Remove all unnecessary attributes from math-field tags for preview
+                    // Keep only value, default-mode, read-only
+                    return htmlString.replace(/<math-field([^>]*)>/g, (match, attrs) => {
+                        const valueMatch = attrs.match(/value="([^"]*)"/);
+                        const modeMatch = attrs.match(/default-mode="([^"]*)"/);
+                        const readOnlyMatch = attrs.match(/read-only/);
+                        
+                        let cleanAttrs = '';
+                        if (valueMatch) cleanAttrs += ` value="${valueMatch[1]}"`;
+                        if (modeMatch) cleanAttrs += ` default-mode="${modeMatch[1]}"`;
+                        if (readOnlyMatch) cleanAttrs += ' read-only';
+                        
+                        return `<math-field${cleanAttrs}>`;
+                    });
+                },
+                */ // <--- نهاية التعطيل
+
                 processBlankTags(htmlString) {
                     try {
                         if (!htmlString || typeof htmlString !== 'string') return htmlString;
@@ -4101,6 +5517,30 @@
                             }
                         );
                         
+                        // CRITICAL FIX: Handle underscore blanks (___) with proper spacing
+                        processed = processed.replace(
+                            /_{3,}/g,
+                            (match) => {
+                                return `<span class="blank-slot" data-blank="true" contenteditable="false" style="border-bottom: 2px solid #333; padding: 0 4px; margin: 0 2px; min-width: 20px; display: inline-block; background-color: #f0f0f0;">&nbsp;___&nbsp;</span>`;
+                            }
+                        );
+                        
+                        // Handle single underscore blanks with proper spacing
+                        processed = processed.replace(
+                            /\b_\b/g,
+                            (match) => {
+                                return `<span class="blank-slot" data-blank="true" contenteditable="false" style="border-bottom: 2px solid #333; padding: 0 4px; margin: 0 2px; min-width: 20px; display: inline-block; background-color: #f0f0f0;">&nbsp;_&nbsp;</span>`;
+                            }
+                        );
+                        
+                        // CRITICAL FIX: Preserve spaces around blanks
+                        processed = processed.replace(
+                            /(\s+)<span class="blank-slot[^>]*>([^<]*)<\/span>(\s+)/g,
+                            (match, beforeSpace, blankContent, afterSpace) => {
+                                return `${beforeSpace}<span class="blank-slot" data-blank="true" contenteditable="false" style="border-bottom: 2px solid #333; padding: 0 4px; margin: 0 2px; min-width: 20px; display: inline-block; background-color: #f0f0f0;">${blankContent}</span>${afterSpace}`;
+                            }
+                        );
+                        
                         return processed;
                     } catch (error) {
                         console.error('Process blank tags error:', error);
@@ -4108,16 +5548,131 @@
                     }
                 },
                 
+                /* // <--- تعطيل دالة processMathFieldTags الثانية
                 processMathFieldTags(htmlString) {
                     try {
                         if (!htmlString || typeof htmlString !== 'string') return htmlString;
                         
                         let processed = htmlString;
                         
-                        // First, remove ONLY LexicalTheme__math wrapper spans
-                        // Be very specific to avoid removing other spans
+                        // CRITICAL FIX 0: Clean nested math-field tags first using our new cleaner
+                        processed = TranslatorApp.utils.cleanMathFieldTags(processed);
+                        
+                        // CRITICAL FIX 1: Handle math-field tags properly
+                        // If a math-field has a value attribute, remove innerHTML (MathLive will render from value)
+                        // If no value attribute, convert innerHTML to value attribute
+                        const beforeCleanInner = processed;
                         processed = processed.replace(
-                            /<span\s+class=["']LexicalTheme__math--inline["']\s+data-node-type=["']math["']\s+data-node-variation=["']inline["'][^>]*>(<math-field[^>]*>.*?<\/math-field>)<\/span>/gi,
+                            /<math-field([^>]*?)>(.*?)<\/math-field>/gi,
+                            (fullMatch, attributes, content) => {
+                                // Check if value attribute exists
+                                const hasValue = /value\s*=\s*["'][^"']*["']/.test(attributes);
+                                
+                                if (hasValue) {
+                                    // Has value: remove content (MathLive renders from value)
+                                    return `<math-field${attributes}></math-field>`;
+                                } else if (content && content.trim()) {
+                                    // No value but has content: move content to value attribute
+                                    const cleanContent = content.trim()
+                                        .replace(/&lt;/g, '<')
+                                        .replace(/&gt;/g, '>')
+                                        .replace(/&amp;/g, '&')
+                                        .replace(/&quot;/g, '"');
+                                    return `<math-field${attributes} value="${cleanContent}"></math-field>`;
+                                } else {
+                                    // No value and no content: keep as is (might be placeholder)
+                                    return `<math-field${attributes}></math-field>`;
+                                }
+                            }
+                        );
+                        
+                        if (beforeCleanInner !== processed) {
+                            console.log('✨ [MathField Fix] Processed math-field innerHTML and value attributes');
+                        }
+                        
+                        // CRITICAL FIX 2: Clean up malformed math-field tags
+                        // Fix broken tags like <math-fieldvalue= to <math-field value=
+                        const beforeFix = processed;
+                        
+                        processed = processed
+                            .replace(/<math-fieldvalue=/g, '<math-field value=')
+                            .replace(/<math-fielddefault-mode=/g, '<math-field default-mode=')
+                            .replace(/<math-fieldread-only/g, '<math-field read-only')
+                            .replace(/<math-fielddir=/g, '<math-field dir=')
+                            .replace(/<math-fieldvirtual-keyboard-mode=/g, '<math-field virtual-keyboard-mode=')
+                            .replace(/<math-fielduse-shared-virtual-keyboard/g, '<math-field use-shared-virtual-keyboard');
+                        
+                        // EXTRA ROBUSTNESS: Fix broken tags written as text with spaces and the Unicode minus sign (−)
+                        // Examples seen: "< math − fieldvalue =", "< math - fielddefault-mode =", etc.
+                        const minusOrHyphen = '[\\-\u2212\u2013\u2014]';
+                        processed = processed
+                            // < math - fieldvalue =  →  <math-field value=
+                            .replace(new RegExp(`<\\s*math\\s*${minusOrHyphen}\\s*fieldvalue\\s*=`, 'gi'), '<math-field value=')
+                            // < math - field value =  →  <math-field value=
+                            .replace(new RegExp(`<\\s*math\\s*${minusOrHyphen}\\s*field\\s*value\\s*=`, 'gi'), '<math-field value=')
+                            // < math - fielddefault-mode =  →  <math-field default-mode=
+                            .replace(new RegExp(`<\\s*math\\s*${minusOrHyphen}\\s*fielddefault-mode\\s*=`, 'gi'), '<math-field default-mode=')
+                            // < math - field read-only  →  <math-field read-only
+                            .replace(new RegExp(`<\\s*math\\s*${minusOrHyphen}\\s*field\\s*read-only`, 'gi'), '<math-field read-only')
+                            // < math - fielddir =  →  <math-field dir=
+                            .replace(new RegExp(`<\\s*math\\s*${minusOrHyphen}\\s*fielddir\\s*=`, 'gi'), '<math-field dir=')
+                            // Generic collapse: < math - field  →  <math-field
+                            .replace(new RegExp(`<\\s*math\\s*${minusOrHyphen}\\s*field`, 'gi'), '<math-field');
+
+                        if (beforeFix !== processed) {
+                            console.log('🔧 [MathField Fix] Fixed malformed math-field tags');
+                        }
+                        
+                        // CRITICAL FIX 3: Handle multiline math-field tags with /gs flag
+                        processed = processed.replace(/<math-field([^>]*)>/gs, (match, attributes) => {
+                            // Normalize whitespace and line breaks
+                            const normalizedAttrs = attributes.replace(/\s+/g, ' ').trim();
+                            
+                            // Extract essential attributes only
+                            const valueMatch = normalizedAttrs.match(/value="([^"]*)"/);
+                            const modeMatch = normalizedAttrs.match(/default-mode="([^"]*)"/);
+                            const localeMatch = normalizedAttrs.match(/locale="([^"]*)"/);
+                            const readOnlyMatch = normalizedAttrs.match(/read-only/);
+                            const dirMatch = normalizedAttrs.match(/dir="([^"]*)"/);
+                            
+                            // Build clean tag
+                            let cleanAttrs = '';
+                            if (valueMatch) cleanAttrs += ` value="${valueMatch[1]}"`;
+                            if (modeMatch) cleanAttrs += ` default-mode="${modeMatch[1]}"`;
+                            if (localeMatch) cleanAttrs += ` locale="${localeMatch[1]}"`;
+                            if (readOnlyMatch) cleanAttrs += ` read-only`;
+                            if (dirMatch) cleanAttrs += ` dir="${dirMatch[1]}"`;
+                            
+                            return `<math-field${cleanAttrs}>`;
+                        });
+                        
+                        // Clean math-field tags - remove unnecessary attributes
+                        processed = TranslatorApp.utils.cleanMathFieldTags(processed);
+                        
+                        // CRITICAL FIX 3: Remove ALL Lexical theme wrapper spans around math-field
+                        // These wrappers prevent MathLive from rendering properly
+                        
+                        // Remove LexicalTheme__math (block mode)
+                        processed = processed.replace(
+                            /<span\s+class=["']LexicalTheme__math["'][^>]*>(<math-field[^>]*><\/math-field>)<\/span>/gi,
+                            '$1'
+                        );
+                        
+                        // Remove LexicalTheme__math--inline (inline mode)
+                        processed = processed.replace(
+                            /<span\s+class=["']LexicalTheme__math--inline["'][^>]*>(<math-field[^>]*><\/math-field>)<\/span>/gi,
+                            '$1'
+                        );
+                        
+                        // Remove merge wrapper spans
+                        processed = processed.replace(
+                            /<span\s+class=["']merge["'][^>]*>(<math-field[^>]*><\/math-field>)<\/span>/gi,
+                            '$1'
+                        );
+                        
+                        // Remove generic spans with data-node-type="math"
+                        processed = processed.replace(
+                            /<span[^>]*data-node-type=["']math["'][^>]*>(<math-field[^>]*><\/math-field>)<\/span>/gi,
                             '$1'
                         );
                         
@@ -4238,7 +5793,7 @@
                             (match, attrs, content) => {
                                 // Extract value attribute
                                 const valueMatch = attrs.match(/value=["']([^"']*)["']/i);
-                                let value = valueMatch ? valueMatch[1] : content;
+                                let value = valueMatch ? valueMatch[1] : content.trim();
                                 
                                 // Clean up value - handle escaped characters and special cases
                                 value = value.replace(/\\displaystyle\{([^}]+)\}/g, '$1')
@@ -4251,13 +5806,14 @@
                                 
                                 // Check if read-only (from source)
                                 const isReadOnly = attrs.includes('read-only');
-                                const readOnlyAttr = isReadOnly ? 'read-only="true"' : '';
+                                const readOnlyAttr = isReadOnly ? ' read-only' : '';
                                 
                                 // Create proper math-field with all attributes
-                                // Always force LTR for math content
+                                // IMPORTANT: The content inside math-field should be EMPTY
+                                // All math content goes in the value attribute only
                                 // Escape the value properly for HTML attribute
                                 const escapedValue = value.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-                                return `<math-field default-mode="${mode}" value="${escapedValue}" ${readOnlyAttr} virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard dir="ltr" style="direction: ltr; unicode-bidi: embed;"></math-field>`;
+                                return `<math-field default-mode="${mode}" value="${escapedValue}"${readOnlyAttr} virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard dir="ltr"></math-field>`;
                             }
                         );
                         
@@ -4267,92 +5823,137 @@
                         return htmlString;
                     }
                 },
+                */ // <--- نهاية التعطيل
 
+                /**
+                 * Convert standalone LaTeX formulas (like \displaystyle{...}, \begin{align}...) to math-field tags
+                 */
+                convertLatexToMathField(htmlString) {
+                    if (!htmlString || typeof htmlString !== 'string') return htmlString;
+                    
+                    let result = htmlString;
+                    let conversionCount = 0;
+                    
+                    // 1. Convert \displaystyle{...} to math-field
+                    result = result.replace(/\\displaystyle\{([^}]+)\}/g, (match, content) => {
+                        conversionCount++;
+                        const cleaned = content.trim();
+                        console.log(`📐 [LaTeX→MathField] Converting \\displaystyle{${cleaned}}`);
+                        return `<math-field value="${cleaned}" read-only default-mode="inline-math" dir="rtl"></math-field>`;
+                    });
+                    
+                    // 2. Convert \begin{align}...\end{align} to math-field
+                    result = result.replace(/\\begin\{align\}([\s\S]*?)\\end\{align\}/g, (match, content) => {
+                        conversionCount++;
+                        const cleaned = content.trim();
+                        const fullFormula = `\\begin{align}${cleaned}\\end{align}`;
+                        console.log(`📐 [LaTeX→MathField] Converting \\begin{align}...\\end{align}`);
+                        return `<math-field value="${fullFormula}" read-only default-mode="math" dir="rtl"></math-field>`;
+                    });
+                    
+                    // 3. Convert \begin{pmatrix}...\end{pmatrix} to math-field
+                    result = result.replace(/\\begin\{pmatrix\}([\s\S]*?)\\end\{pmatrix\}/g, (match, content) => {
+                        conversionCount++;
+                        const cleaned = content.trim();
+                        const fullFormula = `\\begin{pmatrix}${cleaned}\\end{pmatrix}`;
+                        console.log(`📐 [LaTeX→MathField] Converting \\begin{pmatrix}...\\end{pmatrix}`);
+                        return `<math-field value="${fullFormula}" read-only default-mode="math" dir="rtl"></math-field>`;
+                    });
+                    
+                    // 4. Convert \left\{...\right\} and similar to math-field
+                    result = result.replace(/\\left[\[\(\{]([\s\S]*?)\\right[\]\)\}]/g, (match) => {
+                        conversionCount++;
+                        const cleaned = match.trim();
+                        console.log(`📐 [LaTeX→MathField] Converting \\left...\\right`);
+                        return `<math-field value="${cleaned}" read-only default-mode="inline-math" dir="rtl"></math-field>`;
+                    });
+                    
+                    if (conversionCount > 0) {
+                        console.log(`📐 [LaTeX→MathField] Total conversions: ${conversionCount}`);
+                    }
+                    
+                    return result;
+                },
+                
                 renderContentWithMath(htmlString) {
                     try {
                         if (typeof htmlString !== 'string' || !htmlString) {
                             return '<div class="content-root" dir="rtl">&nbsp;</div>';
                         }
-                        const cleanedHtml = htmlString.replace(/R\s*(\d+)/g, 'والباقي $1');
+                        // Debug: log problematic content
+                        if (htmlString.includes('__LOCK') || htmlString.includes('LexicalTheme')) {
+                            console.log('Problematic content detected:', htmlString.substring(0, 200));
+                        }
 
-                        // 1. First, handle blank tags and math-field tags before sanitization
-                        let processedHtml = this.processBlankTags(cleanedHtml);
-                        processedHtml = this.processMathFieldTags(processedHtml);
-                        
-                        // 2. Sanitize the processed HTML (but keep math-field tags)
-                        let sanitizedHtml = TranslatorApp.security.sanitize(processedHtml);
-                        
-                        // 3. Create a temporary DOM element to parse the sanitized HTML
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = sanitizedHtml;
-                
-                        // 3. Use a TreeWalker to process all nodes and convert LaTeX
-                        const walker = document.createTreeWalker(
-                            tempDiv,
-                            NodeFilter.SHOW_TEXT,
-                            null,
-                            false
-                        );
-                        const nodesToReplace = [];
-                        let node;
-                        while ((node = walker.nextNode())) {
-                            let textContent = node.textContent;
-
-                            // Find and replace LaTeX expressions
-                            const latexRegex = /(\$\$[\s\S]*?\$\$|\$[^$]*\$)/g;
-                            const parts = textContent.split(latexRegex);
-                
-                            if (parts.length > 1) {
-                                const fragment = document.createDocumentFragment();
-                                parts.forEach(part => {
-                                    const isDisplayMode = part.startsWith('$$') && part.endsWith('$$');
-                                    const isInlineMode = part.startsWith('$') && part.endsWith('$');
-                
-                                    if (isDisplayMode || isInlineMode) {
-                                        const latex = part.slice(isDisplayMode ? 2 : 1, isDisplayMode ? -2 : -1);
-
-                                        const mf = document.createElement('math-field');
-                                        mf.setAttribute('default-mode', isDisplayMode ? 'math' : 'inline-math');
-                                        mf.setAttribute('value', latex);
-                                        mf.setAttribute('virtual-keyboard-mode', 'onfocus');
-                                        mf.setAttribute('use-shared-virtual-keyboard', '');
-                                        mf.setAttribute('dir', 'ltr');
-                                    
-                                        // Create the delete button and add it directly to the math-field
-                                        const deleteBtn = document.createElement('button');
-                                        deleteBtn.className = 'math-field-delete-btn';
-                                        deleteBtn.textContent = '×';
-                                        deleteBtn.title = 'حذف المعادلة';
-                                        deleteBtn.onclick = (event) => {
-                                            event.stopPropagation();
-                                            const fieldContainer = mf.closest('.editable-preview-field');
-                                            mf.remove(); // This removes the math field itself
-                                            if (fieldContainer) {
-                                                TranslatorApp.preview.handlePreviewFieldUpdate(fieldContainer);
-                                            }
-                                        };
-                                        mf.appendChild(deleteBtn);
-                                        fragment.appendChild(mf);
-                                    } else if (part) {
-                                        fragment.appendChild(document.createTextNode(part));
-                                    }
-                                });
-                                nodesToReplace.push({ oldNode: node, newNode: fragment });
+                        // If content is just __LOCK__ placeholders, try to restore original content
+                        if (htmlString.trim() === '__LOCK__' || htmlString.trim() === '__LOCK_I_LOCK__') {
+                            // Try to find the original content from the original data
+                            const fileIndex = parseInt(document.querySelector('.editable-preview-field')?.dataset.fileIndex || '0', 10);
+                            const path = document.querySelector('.editable-preview-field')?.dataset.path || '';
+                            if (fileIndex >= 0 && path && TranslatorApp.state.originalJsonData[fileIndex]) {
+                                const keys = path.split('.');
+                                let originalContent = TranslatorApp.state.originalJsonData[fileIndex].data;
+                                for (let i = 0; i < keys.length; i++) {
+                                    originalContent = originalContent ? originalContent[keys[i]] : '';
+                                }
+                                if (originalContent && typeof originalContent === 'string') {
+                                    htmlString = originalContent;
+                                }
                             }
                         }
-                        nodesToReplace.forEach(({ oldNode, newNode }) => {
-                            oldNode.parentNode.replaceChild(newNode, oldNode);
+
+                        // Handle empty or null content
+                        if (!htmlString || htmlString.trim() === '') {
+                            return '<div class="content-root" dir="rtl">&nbsp;</div>';
+                        }
+
+                        // 1) Keep any pre-existing <math-field> as-is to avoid double-wrapping
+                        htmlString = htmlString.replace(/<math-field[\s\S]*?<\/math-field>/gi, (m) => `__MATHFIELD__${btoa(unescape(encodeURIComponent(m)))}__`);
+                        const latexRegex = /(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/g;
+                        const parts = htmlString.split(latexRegex);
+                        const content = parts.map(part => {
+                            try {
+                                if (!part) return '';
+                                if (part.startsWith('$$') && part.endsWith('$$')) {
+                                    const latex = part.slice(2, -2).replace(/"/g, '&quot;');
+                                    return `<math-field default-mode="math" value="${latex}" virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard dir="rtl"></math-field>`;
+                                }
+                                if (part.startsWith('$') && part.endsWith('$')) {
+                                    const latex = part.slice(1, -1).replace(/"/g, '&quot;');
+                                    return `<math-field default-mode="inline-math" value="${latex}" virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard dir="rtl"></math-field>`;
+                                }
+                                // Inject editable math-fields for common chemical formulas in plain text
+                                let injected = this.injectChemistryMathFields(part);
+                                // Decorate blanks ___ to visible slots (preview-only)
+                                injected = this.decorateBlanks(injected);
+                                const sanitized = TranslatorApp.security.sanitize(injected)
+                                    // normalize multiplication sign to match system rendering
+                                    .replace(/\bx\b/g, '×');
+                                const hasBlock = /<\s*(table|ul|ol|li|div|p|pre|code|thead|tbody|tr|td|th|img|audio)\b/i.test(sanitized);
+                                return hasBlock ? sanitized : `<span>${sanitized}</span>`;
+                            } catch (partError) {
+                                console.warn('Error processing part:', partError);
+                                return part || '';
+                            }
+                        }).join('');
+                        // 2) Restore original math-field fragments
+                        const restored = content.replace(/__MATHFIELD__([A-Za-z0-9+/=]+)__/g, (_, b64) => {
+                            try { return decodeURIComponent(escape(atob(b64))); } catch { return ''; }
                         });
-                        let finalHtml = tempDiv.innerHTML;
-                        finalHtml = this.decorateBlanks(finalHtml);
-                        finalHtml = this.injectChemistryMathFields(finalHtml);
-                        finalHtml = TranslatorApp.utils.textDirection.enhancePreviewContent(finalHtml);
-                
-                        const textContent = tempDiv.textContent || '';
+
+                        // 3) Apply smart text direction processing
+                        const enhancedContent = TranslatorApp.utils.textDirection.enhancePreviewContent(restored);
+
+                        // 4) Determine the main direction for the container
+                        const textContent = restored.replace(/<[^>]*>/g, ' ').trim();
                         const containerDirection = TranslatorApp.utils.textDirection.getDominantDirection(textContent);
-                        const dirAttr = containerDirection === 'rtl' ? 'rtl' : 'ltr';
-                
-                        return `<div class="content-root" dir="${dirAttr}">${finalHtml}</div>`;
+                        const isMixed = TranslatorApp.utils.textDirection.isMixed(textContent);
+
+                        // 5) Set appropriate attributes for the container
+                        const dirAttr = isMixed ? 'auto' : containerDirection;
+                        const bidiClass = isMixed ? 'mixed-content' : (containerDirection === 'rtl' ? 'rtl-auto' : 'ltr-auto');
+
+                        return `<div class="content-root ${bidiClass}" dir="${dirAttr}">${enhancedContent}</div>`;
                     } catch (error) {
                         console.error('Render content with math error:', error);
                         return '<div class="content-root" dir="rtl">فشل في عرض المحتوى</div>';
@@ -4433,7 +6034,8 @@
                                         mf.setAttribute('value', latex);
                                         mf.setAttribute('virtual-keyboard-mode', 'onfocus');
                                         mf.setAttribute('use-shared-virtual-keyboard', '');
-                                        mf.setAttribute('dir', 'ltr');
+                                        mf.setAttribute('dir', 'rtl');
+                                        mf.setAttribute('locale', 'ar');
                                         fragment.appendChild(mf);
                                     } else if (part.startsWith('$') && part.endsWith('$')) {
                                         const latex = part.slice(1, -1);
@@ -4442,7 +6044,8 @@
                                         mf.setAttribute('value', latex);
                                         mf.setAttribute('virtual-keyboard-mode', 'onfocus');
                                         mf.setAttribute('use-shared-virtual-keyboard', '');
-                                        mf.setAttribute('dir', 'ltr');
+                                        mf.setAttribute('dir', 'rtl');
+                                        mf.setAttribute('locale', 'ar');
                                         fragment.appendChild(mf);
                                     } else if (part) {
                                         fragment.appendChild(document.createTextNode(part));
@@ -4498,7 +6101,7 @@
                                 // Heuristic: skip if match is immediately preceded by '&' (entity) or within a tag
                                 // Since we sanitize later and we run on plain text chunks, this is usually safe
                                 const latex = escapeAttr(toLatex(match));
-                                return `<math-field default-mode="inline-math" value="${latex}" virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard dir="ltr"></math-field>`;
+                                return `<math-field default-mode="inline-math" value="${latex}" virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard dir="rtl"></math-field>`;
                             } catch (error) {
                                 console.warn('Chemistry field injection error:', error);
                                 return match;
@@ -4769,6 +6372,12 @@
                                             </div>
                                             ` : ''}
                                         </div>
+                                        <!-- CRITICAL FIX: Always show both IDs for better tracking -->
+                                        <div style="display: flex; gap: 20px; margin-top: 8px; font-size: 0.8em; color: var(--secondary-text);">
+                                            <span><strong>Translation:</strong> ${originalId}</span>
+                                            ${sourceId ? `<span><strong>Source:</strong> ${sourceId}</span>` : ''}
+                                            ${currentMappedId ? `<span><strong>Mapped:</strong> ${currentMappedId}</span>` : ''}
+                                        </div>
                                         <div class="file-progress-bar">
                                             <div class="file-progress-fill" id="file-progress-fill-${fileIndex}" style="width: 0%"></div>
                                         </div>
@@ -4821,6 +6430,47 @@
                             this.updateAllQualityIndicators();
                             this.updateAllWordCounts();
                             this.loadNotes();
+                            
+                            // CRITICAL FIX: Force MathLive re-initialization after DOM updates
+                            setTimeout(() => {
+                                this.prepareInteractiveMathFields();
+                                
+                                // Additional fix: Force MathLive to process all math-field elements
+                                setTimeout(() => {
+                                    const mathFields = document.querySelectorAll('math-field');
+                                    console.log(`🔢 [MathLive] Force processing ${mathFields.length} math-field elements`);
+                                    
+                                    // CRITICAL FIX: Use MathLive.scan() to reinitialize all math-field elements
+                                    if (window.MathfieldElement && typeof window.MathfieldElement.scan === 'function') {
+                                        console.log('🔢 [MathLive] Using MathfieldElement.scan() to reinitialize elements');
+                                        window.MathfieldElement.scan(document.body);
+                                    }
+                                    
+                                    mathFields.forEach((mf, index) => {
+                                        try {
+                                            // Force MathLive to recognize and render the element
+                                            if (mf.value && typeof window.MathfieldElement !== 'undefined') {
+                                                // Clean the attributes first
+                                                const cleanAttrs = TranslatorApp.utils.cleanMathFieldAttributes(mf);
+                                                
+                                                // Create a new MathfieldElement to force rendering
+                                                const newMf = new window.MathfieldElement();
+                                                newMf.setAttribute('value', cleanAttrs.value || mf.value);
+                                                newMf.setAttribute('read-only', 'true');
+                                                newMf.setAttribute('default-mode', cleanAttrs.defaultMode || 'inline-math');
+                                                if (cleanAttrs.dir) newMf.setAttribute('dir', cleanAttrs.dir);
+                                                
+                                                // Replace the old element with the new one
+                                                mf.parentNode.replaceChild(newMf, mf);
+                                                
+                                                console.log(`🔢 [MathLive] Replaced math-field ${index + 1}`);
+                                            }
+                                        } catch (err) {
+                                            console.warn(`MathLive replacement error for math-field ${index}:`, err);
+                                        }
+                                    });
+                                }, 300);
+                            }, 200);
                         }, 100);
                     } catch (error) {
                         console.error('Preview render error:', error);
@@ -5070,8 +6720,10 @@
                         // Let's assume the original values are always English and force LTR for them.
                         const originalDir = 'ltr'; 
                 
-                        const enhancedOriginal = TranslatorApp.utils.textDirection.enhancePreviewContent(displayOriginalValue);
-                        const enhancedTranslated = TranslatorApp.utils.textDirection.enhancePreviewContent(displayTranslatedValue);
+                        // CRITICAL FIX: Use renderContentWithMath for both original and translated content
+                        // This ensures math-field tags and LaTeX are properly rendered
+                        const renderedOriginal = TranslatorApp.preview.renderContentWithMath(displayOriginalValue);
+                        const renderedTranslated = TranslatorApp.preview.renderContentWithMath(displayTranslatedValue);
                 
                         return `
                             <div class="border rounded-lg p-4" style="border-color: var(--card-border);">
@@ -5079,11 +6731,11 @@
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <p class="text-sm font-semibold mb-1" style="color: var(--secondary-text);">الأصلي</p>
-                                        <div class="p-3 rounded-lg text-sm h-full" dir="${originalDir}" style="background-color: var(--bg-color); color: var(--secondary-text);">${enhancedOriginal}</div>
+                                        <div class="p-3 rounded-lg text-sm h-full" dir="${originalDir}" style="background-color: var(--bg-color); color: var(--secondary-text);">${renderedOriginal}</div>
                                     </div>
                                     <div>
                                         <p class="text-sm font-semibold mb-1" style="color: var(--success-color);">المترجم (قابل للتعديل)</p>
-                                        <div class="p-3 rounded-lg text-sm h-full" dir="rtl" style="background-color: var(--bg-color); color: var(--secondary-text);">${enhancedTranslated}</div>
+                                        <div class="p-3 rounded-lg text-sm h-full" dir="rtl" style="background-color: var(--bg-color); color: var(--secondary-text);">${renderedTranslated}</div>
                                     </div>
                                 </div>
                             </div>`;
@@ -5102,8 +6754,23 @@
                     const fieldId = `field-${fileIndex}-${path.replace(/\./g, '-')}`;
                     const statusId = `status-${fieldId}`;
                 
-                    // Get the translated unit from the new map
-                    const translatedUnitText = TranslatorApp.quality.unitsMap[originalUnit.toLowerCase()] || originalUnit;
+                    // CRITICAL FIX: Enhanced unit translation with more comprehensive mapping
+                    const unitsMap = {
+                        ...TranslatorApp.quality.unitsMap,
+                        'km': 'كم', 'kilometer': 'كم', 'kilometers': 'كم',
+                        'm': 'م', 'meter': 'م', 'meters': 'م',
+                        'cm': 'سم', 'centimeter': 'سم', 'centimeters': 'سم',
+                        'mm': 'مم', 'millimeter': 'مم', 'millimeters': 'مم',
+                        'kg': 'كجم', 'kilogram': 'كجم', 'kilograms': 'كجم',
+                        'g': 'جم', 'gram': 'جم', 'grams': 'جم',
+                        'l': 'ل', 'liter': 'ل', 'liters': 'ل',
+                        'ml': 'مل', 'milliliter': 'مل', 'milliliters': 'مل',
+                        's': 'ث', 'second': 'ث', 'seconds': 'ث',
+                        'min': 'د', 'minute': 'د', 'minutes': 'د',
+                        'h': 'س', 'hour': 'س', 'hours': 'س'
+                    };
+                    
+                    const translatedUnitText = unitsMap[originalUnit.toLowerCase()] || originalUnit;
                 
                     return `
                         <div class="border rounded-lg p-4" style="border-color: var(--card-border);">
@@ -5252,7 +6919,8 @@
                                         </div>
                                         
                                         <div class="mt-4 hidden">
-                                             <p class="text-sm font-semibold mb-1" style="color: var (--secondary-text);">مقارنة الفروقات (الترجمة الأولية مقابل الترجمة الحالية)</p>
+                                             <p class="text-sm font-semibold mb-1" style="color: var(--secondary-text);">مقارنة الفروقات (الترجمة الأولية مقابل الترجمة الحالية)</p>
+                                             <p class="text-xs mb-2" style="color: var(--secondary-text);">💡 هذا يقارن الترجمة الآلية الأولية مع الترجمة الحالية (كلاهما بالعربية)</p>
                                             <div id="${diffId}" class="diff-view"></div>
                                         </div>
                                     </div>`;
@@ -5304,14 +6972,23 @@
                                 // Add choices section header for better organization
                                 if (part.choices && part.choices.length > 0) {
                                     html += '<div class="mt-4 mb-2"><h6 class="font-semibold text-sm" style="color: var(--secondary-text);">الخيارات (Choices):</h6></div>';
+                                    
+                                    // CRITICAL FIX: Add note about choice order
+                                    html += '<div class="mb-3 p-2 bg-blue-50 rounded text-xs" style="color: var(--secondary-text);">';
+                                    html += '💡 <strong>ملاحظة:</strong> ترتيب الخيارات من اليمين لليسار (RTL) كما هو مطلوب في المناهج العربية';
+                                    html += '</div>';
                                 }
                                 
                                 part.choices?.forEach((choice, choiceIndex) => {
                                     const originalChoice = originalPart.choices[choiceIndex];
                                     const isCorrect = choice.is_correct || false;
                                     const correctBadge = isCorrect ? ' <span style="background-color: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">✓ صحيح</span>' : '';
-                                    // Use 'auto' for choices to respect math-field LTR while keeping text RTL
-                                    html += renderField(`خيار ${choiceIndex + 1}${correctBadge}`, originalChoice.html_content, choice.html_content, `parts.${partIndex}.choices.${choiceIndex}.html_content`, 'auto');
+                                    
+                                    // CRITICAL FIX: Add visual indicator for correct answers
+                                    const correctIndicator = isCorrect ? ' <span style="color: #10b981; font-weight: bold;">[الإجابة الصحيحة]</span>' : '';
+                                    
+                                    // CRITICAL FIX: Force RTL for Arabic choices to fix LTR issue
+                                    html += renderField(`خيار ${choiceIndex + 1}${correctBadge}${correctIndicator}`, originalChoice.html_content, choice.html_content, `parts.${partIndex}.choices.${choiceIndex}.html_content`, 'rtl');
                                 });
                 
                                 if (originalPart.gap_text_keys) {
@@ -5503,18 +7180,77 @@
                 prepareInteractiveMathFields() {
                     try {
                         const mathFields = TranslatorApp.dom.previewContainer.querySelectorAll('math-field');
-                        mathFields.forEach(mf => {
+                        console.log(`🔢 [MathLive] Found ${mathFields.length} math-field elements to initialize`);
+                        
+                        // CRITICAL FIX: Wait for MathLive to be fully loaded
+                        if (typeof window.MathfieldElement === 'undefined') {
+                            console.warn('🔢 [MathLive] MathfieldElement not loaded yet, retrying in 100ms...');
+                            setTimeout(() => this.prepareInteractiveMathFields(), 100);
+                            return;
+                        }
+                        
+                        // CRITICAL FIX: Force MathLive to recognize custom elements
+                        if (!customElements.get('math-field')) {
+                            console.warn('🔢 [MathLive] Custom element not registered, retrying...');
+                            setTimeout(() => this.prepareInteractiveMathFields(), 200);
+                            return;
+                        }
+                        
+                        mathFields.forEach((mf, index) => {
+                            console.log(`🔢 [MathLive] Initializing math-field ${index + 1}:`, {
+                                value: mf.value,
+                                defaultMode: mf.getAttribute('default-mode'),
+                                readOnly: mf.getAttribute('read-only'),
+                                isInEditable: !!mf.closest('.editable-preview-field'),
+                                isInOriginal: !!mf.closest('.original-text-readonly')
+                            });
                             try {
                                 // Check if this math-field is in an editable area
                                 const isInEditableArea = mf.closest('.editable-preview-field');
                                 const isInOriginal = mf.closest('.original-text-readonly');
                                 
-                                // Only remove read-only from editable areas
+                                // CRITICAL FIX: Apply RTL direction and Arabic locale for translation area
                                 if (isInEditableArea) {
+                                    // Translation area (Arabic) - RTL direction
                                     mf.removeAttribute('read-only');
+                                    mf.setAttribute('dir', 'rtl');
+                                    mf.setAttribute('locale', 'ar');
+                                    mf.setAttribute('virtual-keyboard-default-language', 'ar');
+                                    console.log('✅ [RTL] Applied RTL direction for Arabic translation math-field');
                                 } else if (isInOriginal) {
-                                    // Keep read-only for original text
+                                    // Original area (English) - LTR direction
                                     mf.setAttribute('read-only', 'true');
+                                    mf.setAttribute('dir', 'ltr');
+                                    mf.setAttribute('locale', 'en');
+                                    mf.setAttribute('virtual-keyboard-default-language', 'en');
+                                    console.log('✅ [LTR] Applied LTR direction for English original math-field');
+                                }
+                                
+                                // Force MathLive to recognize and render the element
+                                if (mf.value && mf.value.trim()) {
+                                    try {
+                                        // CRITICAL FIX: Ensure MathLive processes the element
+                                        if (mf.value && !mf.innerHTML.includes('math-field')) {
+                                            // Force MathLive to render the value
+                                            mf.setAttribute('value', mf.value);
+                                            mf.dispatchEvent(new Event('input'));
+                                            mf.dispatchEvent(new Event('change'));
+                                        }
+                                        
+                                        // Mark as initialized
+                                        mf.setAttribute('data-mathlive-initialized', 'true');
+                                        
+                                        // CRITICAL FIX: Force re-render if needed
+                                        setTimeout(() => {
+                                            if (mf.value && mf.innerHTML === mf.value) {
+                                                console.warn('🔢 [MathLive] Force re-rendering math-field');
+                                                mf.innerHTML = '';
+                                                mf.setAttribute('value', mf.value);
+                                            }
+                                        }, 50);
+                                    } catch (err) {
+                                        console.warn('MathLive rendering trigger error:', err);
+                                    }
                                 }
                                 
                                 mf.setAttribute('virtual-keyboard-mode', 'onfocus');
@@ -5562,6 +7298,40 @@
                                 // Enable Arabic and English input
                                 mf.setAttribute('virtual-keyboard-languages', 'ar,en');
                                 mf.setAttribute('virtual-keyboard-default-language', 'ar');
+                                
+                                // CRITICAL FIX: Enable right-click and long-press functionality
+                                mf.setAttribute('virtual-keyboard-toggle', 'on');
+                                mf.setAttribute('virtual-keyboard-mode', 'onfocus');
+                                mf.setAttribute('use-shared-virtual-keyboard', '');
+                                
+                                // Add event listeners for right-click and long-press
+                                mf.addEventListener('contextmenu', (e) => {
+                                    e.preventDefault();
+                                    try {
+                                        mf.executeCommand('showVirtualKeyboard');
+                                    } catch (err) {
+                                        console.warn('MathLive keyboard context menu error:', err);
+                                    }
+                                });
+                                
+                                let longPressTimer;
+                                mf.addEventListener('pointerdown', (e) => {
+                                    longPressTimer = setTimeout(() => {
+                                        try {
+                                            mf.executeCommand('showVirtualKeyboard');
+                                        } catch (err) {
+                                            console.warn('MathLive keyboard long-press error:', err);
+                                        }
+                                    }, 500);
+                                });
+                                
+                                mf.addEventListener('pointerup', () => {
+                                    clearTimeout(longPressTimer);
+                                });
+                                
+                                mf.addEventListener('pointerleave', () => {
+                                    clearTimeout(longPressTimer);
+                                });
 
                                 // Set direction based on content
                                 const currentValue = mf.value || '';
@@ -5643,6 +7413,40 @@
                                 console.warn('MathLive field setup error:', fieldError);
                             }
                         });
+                        
+                        // CRITICAL: Explicitly tell MathLive to scan for new math-field elements
+                        try {
+                            console.log('🔍 [MathLive] Attempting explicit scan/render...');
+                            
+                            // Method 1: Try MathfieldElement.scan (newer API)
+                            if (window.MathfieldElement && typeof window.MathfieldElement.scan === 'function') {
+                                window.MathfieldElement.scan(TranslatorApp.dom.previewContainer);
+                                console.log('✅ [MathLive] MathfieldElement.scan() executed successfully');
+                            } 
+                            // Method 2: Try MathLive.renderMathInElement (older API)
+                            else if (window.MathLive && typeof window.MathLive.renderMathInElement === 'function') {
+                                window.MathLive.renderMathInElement(TranslatorApp.dom.previewContainer);
+                                console.log('✅ [MathLive] MathLive.renderMathInElement() executed successfully');
+                            }
+                            // Method 3: Try direct activation of each element
+                            else {
+                                console.log('⚠️ [MathLive] No scan method available, trying direct activation');
+                                mathFields.forEach((mf, index) => {
+                                    try {
+                                        // Force re-render by updating value
+                                        const currentValue = mf.getAttribute('value') || mf.value || '';
+                                        if (currentValue) {
+                                            mf.value = currentValue;
+                                            console.log(`✅ [MathLive] Manually activated math-field ${index + 1}`);
+                                        }
+                                    } catch (activationError) {
+                                        console.warn(`❌ [MathLive] Failed to activate math-field ${index + 1}:`, activationError);
+                                    }
+                                });
+                            }
+                        } catch (scanError) {
+                            console.warn('❌ [MathLive] Scan/render error:', scanError);
+                        }
                     } catch (generalError) {
                         console.warn('MathLive general setup error:', generalError);
                     }
@@ -5834,9 +7638,99 @@
                     
                     const zip = new JSZip();
                     
+                    // Helper function to add RTL direction to all math-field tags in content
+                    const addRTLToMathFields = (content) => {
+                        if (!content || typeof content !== 'string') return content;
+                        
+                        // Add dir="rtl" and locale="ar" to all <math-field> tags that don't have them
+                        let processed = content;
+                        
+                        // Pattern 1: math-field without dir attribute
+                        processed = processed.replace(
+                            /<math-field(?!\s+[^>]*\bdir=)([^>]*)>/gi,
+                            (match, attrs) => {
+                                // Add dir="rtl" if not present
+                                return `<math-field dir="rtl"${attrs}>`;
+                            }
+                        );
+                        
+                        // Pattern 2: math-field with dir="ltr" - change to rtl
+                        processed = processed.replace(
+                            /<math-field([^>]*)\bdir="ltr"([^>]*)>/gi,
+                            '<math-field$1dir="rtl"$2>'
+                        );
+                        
+                        // Pattern 3: Add locale="ar" if not present
+                        processed = processed.replace(
+                            /<math-field(?!\s+[^>]*\blocale=)([^>]*)>/gi,
+                            (match, attrs) => {
+                                return `<math-field locale="ar"${attrs}>`;
+                            }
+                        );
+                        
+                        // Pattern 4: math-field with locale="en" - change to ar
+                        processed = processed.replace(
+                            /<math-field([^>]*)\blocale="en"([^>]*)>/gi,
+                            '<math-field$1locale="ar"$2>'
+                        );
+                        
+                        return processed;
+                    };
+                    
                     for (const translatedFile of TranslatorApp.state.translatedJsonData) {
                         const finalData = JSON.parse(JSON.stringify(translatedFile.data));
                         const originalId = TranslatorApp.state.originalJsonData.find(f => f.name === translatedFile.name)?.data?.id;
+                    
+                        // CRITICAL FIX: Process all string fields to add RTL to math-field tags
+                        // Process statement
+                        if (finalData.statement) {
+                            finalData.statement = addRTLToMathFields(finalData.statement);
+                        }
+                        
+                        // Process parts
+                        if (finalData.parts && Array.isArray(finalData.parts)) {
+                            finalData.parts.forEach(part => {
+                                // Process stem
+                                if (part.stem) {
+                                    part.stem = addRTLToMathFields(part.stem);
+                                }
+                                
+                                // Process answer
+                                if (typeof part.answer === 'string') {
+                                    part.answer = addRTLToMathFields(part.answer);
+                                }
+                                
+                                // Process choices
+                                if (part.choices && Array.isArray(part.choices)) {
+                                    part.choices.forEach(choice => {
+                                        if (choice.html_content) {
+                                            choice.html_content = addRTLToMathFields(choice.html_content);
+                                        }
+                                    });
+                                }
+                                
+                                // Process gap_text_keys
+                                if (part.gap_text_keys && Array.isArray(part.gap_text_keys)) {
+                                    part.gap_text_keys.forEach(key => {
+                                        if (key.value) {
+                                            key.value = addRTLToMathFields(key.value);
+                                        }
+                                    });
+                                }
+                                
+                                // Process AI guidelines
+                                if (part.ai && part.ai.guidelines && Array.isArray(part.ai.guidelines)) {
+                                    part.ai.guidelines.forEach(guideline => {
+                                        if (guideline.comment) {
+                                            guideline.comment = addRTLToMathFields(guideline.comment);
+                                        }
+                                        if (guideline.student_answer) {
+                                            guideline.student_answer = addRTLToMathFields(guideline.student_answer);
+                                        }
+                                    });
+                                }
+                            });
+                        }
                     
                         finalData.metadata = finalData.metadata || {};
                         finalData.metadata.title = "";
@@ -5887,7 +7781,10 @@
                         }
                     
                         zip.file(fileNameToUse, JSON.stringify(finalData, null, 2));
+                        console.log(`✅ [Export] Processed file: ${fileNameToUse} - RTL applied to all math-field tags`);
                     }
+                    
+                    console.log(`🎉 [Export] Total files processed: ${TranslatorApp.state.translatedJsonData.length} - All math-fields have RTL direction in exported JSON`);
                     
                     if (useMappedIds && idCounter < TranslatorApp.state.translatedJsonData.length) {
                         TranslatorApp.ui.showAlert(`تحذير: عدد المعرفات (${idCounter}) أقل من عدد الملفات (${TranslatorApp.state.translatedJsonData.length}).`, 'error');
