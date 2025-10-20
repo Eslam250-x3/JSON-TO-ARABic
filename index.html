@@ -3692,7 +3692,9 @@
                         'sin': 'جا', 'cos': 'جتا', 'tan': 'ظا',
                         'cot': 'ظتا', 'sec': 'قا', 'csc': 'قتا',
                         'arcsin': 'جا⁻¹', 'arccos': 'جتا⁻¹', 'arctan': 'ظا⁻¹',
+                        'arccot': 'ظتا⁻¹', 'arcsec': 'قا⁻¹', 'arccsc': 'قتا⁻¹',
                         'sinh': 'جاز', 'cosh': 'جتاز', 'tanh': 'ظاز',
+                        'coth': 'ظتاز', 'sech': 'قاز', 'csch': 'قتاز',
                         
                         // Logarithmic functions
                         'log': 'لو', 'ln': 'لو', 'lg': 'لو',
@@ -3703,17 +3705,31 @@
                         'transpose': 'منقول', 'inverse': 'معكوس',
                         'determinant': 'المحدد', 'trace': 'الأثر',
                         'rank': 'الرتبة', 'dimension': 'البعد',
+                        'eigenvalue': 'القيمة الذاتية', 'eigenvector': 'المتجه الذاتي',
+                        'diagonal': 'قطري', 'identity': 'الوحدة',
+                        'null space': 'الفضاء الصفري', 'row': 'صف', 'column': 'عمود',
+                        'span': 'امتداد', 'basis': 'أساس',
                         
                         // Calculus terms
                         'function': 'دالة', 'derivative': 'مشتق', 'integral': 'تكامل',
                         'limit': 'نهاية', 'sum': 'مجموع', 'product': 'حاصل ضرب',
                         'differential': 'تفاضل', 'gradient': 'تدرج',
                         'divergence': 'تباعد', 'curl': 'دوران',
+                        'partial': 'جزئي', 'total': 'كلي',
+                        'definite': 'محدد', 'indefinite': 'غير محدد',
+                        'domain': 'المجال', 'range': 'المدى', 'codomain': 'المجال المقابل',
+                        'image': 'الصورة', 'preimage': 'أصل الصورة',
+                        'continuous': 'متصل', 'discontinuous': 'منفصل',
+                        'differentiable': 'قابل للاشتقاق',
                         
                         // Set theory
                         'set': 'مجموعة', 'subset': 'مجموعة جزئية',
                         'union': 'اتحاد', 'intersection': 'تقاطع',
                         'element': 'عنصر', 'complement': 'متمم',
+                        'empty set': 'مجموعة خالية', 'null set': 'مجموعة خالية',
+                        'proper subset': 'مجموعة جزئية حقيقية',
+                        'universal set': 'المجموعة الشاملة',
+                        'disjoint': 'منفصلتان', 'partition': 'تجزئة',
                         
                         // Geometry
                         'angle': 'زاوية', 'triangle': 'مثلث', 'circle': 'دائرة',
@@ -3722,6 +3738,23 @@
                         'cone': 'مخروط', 'pyramid': 'هرم',
                         'radius': 'نصف القطر', 'diameter': 'القطر',
                         'perimeter': 'المحيط', 'area': 'المساحة', 'volume': 'الحجم',
+                        'circumference': 'المحيط', 'chord': 'وتر',
+                        'tangent': 'مماس', 'secant': 'قاطع',
+                        'arc': 'قوس', 'sector': 'قطاع',
+                        'segment': 'قطعة', 'vertex': 'رأس', 'vertices': 'رؤوس',
+                        'edge': 'حرف', 'face': 'وجه',
+                        'altitude': 'ارتفاع', 'median': 'متوسط',
+                        'bisector': 'منصف', 'hypotenuse': 'الوتر',
+                        'adjacent': 'مجاور', 'opposite': 'مقابل',
+                        'acute': 'حاد', 'obtuse': 'منفرج', 'right': 'قائم',
+                        'isosceles': 'متساوي الساقين', 'equilateral': 'متساوي الأضلاع',
+                        'scalene': 'مختلف الأضلاع',
+                        'parallelogram': 'متوازي أضلاع', 'trapezoid': 'شبه منحرف',
+                        'rhombus': 'معين', 'kite': 'طائرة ورقية',
+                        'pentagon': 'خماسي', 'hexagon': 'سداسي',
+                        'heptagon': 'سباعي', 'octagon': 'ثماني',
+                        'ellipse': 'قطع ناقص', 'parabola': 'قطع مكافئ',
+                        'hyperbola': 'قطع زائد',
                         
                         // Algebra
                         'equation': 'معادلة', 'inequality': 'متباينة',
@@ -3730,12 +3763,90 @@
                         'variable': 'متغير', 'exponent': 'أس',
                         'root': 'جذر', 'sqrt': 'جذر', 'square root': 'الجذر التربيعي',
                         'cube root': 'الجذر التكعيبي',
+                        'quadratic': 'تربيعي', 'cubic': 'تكعيبي',
+                        'linear': 'خطي', 'binomial': 'ذو حدين',
+                        'trinomial': 'ثلاثي الحدود', 'monomial': 'وحيد الحد',
+                        'factor': 'عامل', 'factorize': 'تحليل',
+                        'expand': 'فك', 'simplify': 'تبسيط',
+                        'solve': 'حل', 'solution': 'الحل',
                         
                         // Statistics & Probability
                         'mean': 'الوسط', 'median': 'الوسيط', 'mode': 'المنوال',
                         'variance': 'التباين', 'deviation': 'الانحراف',
                         'probability': 'احتمال', 'distribution': 'توزيع',
                         'sample': 'عينة', 'population': 'مجتمع',
+                        'standard deviation': 'الانحراف المعياري',
+                        'random': 'عشوائي', 'experiment': 'تجربة',
+                        'event': 'حدث', 'outcome': 'نتيجة',
+                        'frequency': 'التكرار', 'relative frequency': 'التكرار النسبي',
+                        'percentile': 'المئيني', 'quartile': 'الربيعي',
+                        'correlation': 'الارتباط', 'regression': 'الانحدار',
+                        
+                        // Combinatorics
+                        'nCr': 'نتر', 'nPr': 'نلر',
+                        'combination': 'توافيق', 'permutation': 'تباديل',
+                        'C': 'ت', 'P': 'ل',
+                        'factorial': 'مضروب', 'choose': 'اختيار',
+                        
+                        // Greek letters (for reference in text)
+                        'alpha': 'ألفا', 'beta': 'بيتا', 'gamma': 'جاما', 'delta': 'دلتا',
+                        'epsilon': 'إبسيلون', 'zeta': 'زيتا', 'eta': 'إيتا', 'theta': 'ثيتا',
+                        'iota': 'يوتا', 'kappa': 'كابا', 'lambda': 'لامدا', 'mu': 'ميو',
+                        'nu': 'نيو', 'xi': 'كسي', 'omicron': 'أوميكرون', 'pi': 'باي',
+                        'rho': 'رو', 'sigma': 'سيجما', 'tau': 'تاو', 'upsilon': 'أوبسيلون',
+                        'phi': 'فاي', 'chi': 'كاي', 'psi': 'بساي', 'omega': 'أوميجا',
+                        
+                        // Number theory
+                        'prime': 'أولي', 'composite': 'مركب',
+                        'even': 'زوجي', 'odd': 'فردي',
+                        'divisor': 'قاسم', 'multiple': 'مضاعف',
+                        'gcd': 'ق.م.أ', 'lcm': 'م.م.أ',
+                        'quotient': 'خارج القسمة', 'remainder': 'باقي القسمة',
+                        'modulo': 'باقي القسمة على', 'mod': 'باقي',
+                        
+                        // Logic & Proofs
+                        'theorem': 'نظرية', 'lemma': 'مبرهنة مساعدة',
+                        'corollary': 'نتيجة', 'proposition': 'قضية',
+                        'axiom': 'بديهية', 'postulate': 'مسلمة',
+                        'proof': 'برهان', 'qed': 'ق.أ.ب',
+                        'if and only if': 'إذا وفقط إذا', 'iff': 'إ.ف.إ',
+                        'implies': 'يستلزم', 'therefore': 'إذن',
+                        'because': 'لأن', 'such that': 'بحيث',
+                        'for all': 'لكل', 'there exists': 'يوجد',
+                        
+                        // Relations
+                        'equals': 'يساوي', 'not equal': 'لا يساوي',
+                        'greater than': 'أكبر من', 'less than': 'أصغر من',
+                        'greater than or equal': 'أكبر من أو يساوي',
+                        'less than or equal': 'أصغر من أو يساوي',
+                        'approximately': 'تقريباً', 'equivalent': 'مكافئ',
+                        'congruent': 'متطابق', 'similar': 'متشابه',
+                        'proportional': 'متناسب', 'parallel': 'موازي',
+                        'perpendicular': 'عمودي',
+                        
+                        // Physics terms
+                        'velocity': 'السرعة', 'acceleration': 'التسارع',
+                        'force': 'القوة', 'mass': 'الكتلة', 'weight': 'الوزن',
+                        'energy': 'الطاقة', 'power': 'القدرة',
+                        'momentum': 'الزخم', 'impulse': 'الدفع',
+                        'work': 'الشغل', 'pressure': 'الضغط',
+                        'density': 'الكثافة', 'temperature': 'درجة الحرارة',
+                        'charge': 'الشحنة', 'current': 'التيار',
+                        'voltage': 'الجهد', 'resistance': 'المقاومة',
+                        'frequency': 'التردد', 'wavelength': 'الطول الموجي',
+                        'amplitude': 'السعة', 'period': 'الدورة',
+                        'kinetic': 'حركي', 'potential': 'كامن',
+                        'thermal': 'حراري', 'mechanical': 'ميكانيكي',
+                        'electric': 'كهربائي', 'magnetic': 'مغناطيسي',
+                        'gravitational': 'جاذبي',
+                        
+                        // Advanced operations
+                        'absolute value': 'القيمة المطلقة', 'abs': 'ق.م',
+                        'floor': 'الجزء الصحيح', 'ceiling': 'السقف',
+                        'round': 'تقريب', 'truncate': 'بتر',
+                        'reciprocal': 'المقلوب', 'conjugate': 'المرافق',
+                        'magnitude': 'المقدار', 'argument': 'السعة',
+                        'real part': 'الجزء الحقيقي', 'imaginary part': 'الجزء التخيلي',
                         
                         // Constants
                         'pi': 'π', 'infinity': '∞', 'euler': 'هـ',
@@ -3753,9 +3864,20 @@
                     const sortedTerms = Object.entries(termMap).sort((a, b) => b[0].length - a[0].length);
                     
                     sortedTerms.forEach(([english, arabic]) => {
-                        // Use word boundaries for better matching
-                        const regex = new RegExp(`\\b${english}\\b`, 'gi');
-                        translated = translated.replace(regex, arabic);
+                        // Special handling for C and P with subscript/superscript numbers
+                        if (english === 'C' || english === 'P') {
+                            // Match C or P when followed by subscript or superscript numbers
+                            const regex = new RegExp(`\\b${english}(?=[₀₁₂₃₄₅₆₇₈₉⁰¹²³⁴⁵⁶⁷⁸⁹])`, 'g');
+                            translated = translated.replace(regex, arabic);
+                            
+                            // Also match when preceded by superscript numbers
+                            const regex2 = new RegExp(`(?<=[⁰¹²³⁴⁵⁶⁷⁸⁹])${english}(?=[₀₁₂₃₄₅₆₇₈₉]|\\s|$)`, 'g');
+                            translated = translated.replace(regex2, arabic);
+                        } else {
+                            // Use word boundaries for better matching
+                            const regex = new RegExp(`\\b${english}\\b`, 'gi');
+                            translated = translated.replace(regex, arabic);
+                        }
                     });
 
                     return translated;
@@ -5916,11 +6038,11 @@
                                 if (!part) return '';
                                 if (part.startsWith('$$') && part.endsWith('$$')) {
                                     const latex = part.slice(2, -2).replace(/"/g, '&quot;');
-                                    return `<math-field default-mode="math" value="${latex}" virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard dir="rtl"></math-field>`;
+                                    return `<math-field default-mode="math" value="${latex}" virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard virtual-keyboard-default-language="ar" locale="ar" dir="rtl"></math-field>`;
                                 }
                                 if (part.startsWith('$') && part.endsWith('$')) {
                                     const latex = part.slice(1, -1).replace(/"/g, '&quot;');
-                                    return `<math-field default-mode="inline-math" value="${latex}" virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard dir="rtl"></math-field>`;
+                                    return `<math-field default-mode="inline-math" value="${latex}" virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard virtual-keyboard-default-language="ar" locale="ar" dir="rtl"></math-field>`;
                                 }
                                 // Inject editable math-fields for common chemical formulas in plain text
                                 let injected = this.injectChemistryMathFields(part);
@@ -6101,7 +6223,7 @@
                                 // Heuristic: skip if match is immediately preceded by '&' (entity) or within a tag
                                 // Since we sanitize later and we run on plain text chunks, this is usually safe
                                 const latex = escapeAttr(toLatex(match));
-                                return `<math-field default-mode="inline-math" value="${latex}" virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard dir="rtl"></math-field>`;
+                                return `<math-field default-mode="inline-math" value="${latex}" virtual-keyboard-mode="onfocus" use-shared-virtual-keyboard virtual-keyboard-default-language="ar" locale="ar" dir="rtl"></math-field>`;
                             } catch (error) {
                                 console.warn('Chemistry field injection error:', error);
                                 return match;
@@ -7216,6 +7338,22 @@
                                     mf.setAttribute('dir', 'rtl');
                                     mf.setAttribute('locale', 'ar');
                                     mf.setAttribute('virtual-keyboard-default-language', 'ar');
+                                    
+                                    // ✨ CRITICAL: Force Arabic keyboard to be active by default
+                                    if (typeof mf.setOptions === 'function') {
+                                        mf.setOptions({
+                                            locale: 'ar',
+                                            virtualKeyboardMode: 'onfocus',
+                                            virtualKeyboards: 'numeric functions symbols greek',
+                                            customVirtualKeyboardLayers: {
+                                                'arabic-math': {
+                                                    label: 'العربية',
+                                                    tooltip: 'لوحة المفاتيح العربية الرياضية'
+                                                }
+                                            }
+                                        });
+                                    }
+                                    
                                     console.log('✅ [RTL] Applied RTL direction for Arabic translation math-field');
                                 } else if (isInOriginal) {
                                     // Original area (English) - LTR direction
@@ -7363,20 +7501,41 @@
 
                                 mf.addEventListener('focus', () => {
                                     try {
+                                        // ✨ CRITICAL: For Arabic translation area, always start with Arabic keyboard
+                                        if (isInEditableArea) {
+                                            mf.setAttribute('virtual-keyboard-default-language', 'ar');
+                                            mf.setAttribute('dir', 'rtl');
+                                            
+                                            // Force Arabic locale
+                                            if (typeof mf.setOptions === 'function') {
+                                                mf.setOptions({
+                                                    locale: 'ar',
+                                                    virtualKeyboardMode: 'onfocus'
+                                                });
+                                            }
+                                        }
+                                        
                                         if (typeof mf.executeCommand === 'function') {
                                             setTimeout(() => {
                                                 try {
                                                     mf.executeCommand('showVirtualKeyboard');
 
-                                                    // Set initial language based on content
-                                                    const value = mf.value || '';
-                                                    const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(value);
-                                                    if (hasArabic) {
+                                                    // Set initial language based on content or area
+                                                    if (isInEditableArea) {
+                                                        // Always Arabic for translation area
                                                         mf.setAttribute('virtual-keyboard-default-language', 'ar');
                                                         mf.setAttribute('dir', 'rtl');
                                                     } else {
-                                                        mf.setAttribute('virtual-keyboard-default-language', 'en');
-                                                        mf.setAttribute('dir', 'ltr');
+                                                        // Original area: detect from content
+                                                        const value = mf.value || '';
+                                                        const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(value);
+                                                        if (hasArabic) {
+                                                            mf.setAttribute('virtual-keyboard-default-language', 'ar');
+                                                            mf.setAttribute('dir', 'rtl');
+                                                        } else {
+                                                            mf.setAttribute('virtual-keyboard-default-language', 'en');
+                                                            mf.setAttribute('dir', 'ltr');
+                                                        }
                                                     }
                                                 } catch (keyboardError) {
                                                     console.warn('MathLive keyboard error:', keyboardError);
