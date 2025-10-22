@@ -6538,15 +6538,6 @@
                             // If content has actual text, preserve it but convert to underscores
                             return content.replace(/\S/g, '_').replace(/_+/g, '___');
                         });
-                        
-                        // ✨ Apply postProcess to ensure math-field transformations are saved
-                        // (Arabic commas, RTL cases columns, number/symbol conversions)
-                        const ctx = {
-                            subject: TranslatorApp.state.selectedSubject,
-                            grade: TranslatorApp.state.selectedGrade
-                        };
-                        newContent = TranslatorApp.quality.postProcess(newContent, ctx);
-                        
                         this.updateData(fileIndex, path, newContent);
                         this.updateDiff(fileIndex, path);
                         const statusEl = document.getElementById(`status-field-${fileIndex}-${path.replace(/\./g, '-')}`);
@@ -8005,16 +7996,8 @@
                     const applyRTLToContent = (content) => {
                         if (!content || typeof content !== 'string') return content;
                         
-                        // ✨ STEP 1: Apply postProcess FIRST to ensure math-field transformations
-                        // (Arabic commas, RTL cases columns, number/symbol conversions)
-                        const ctx = {
-                            subject: TranslatorApp.state.selectedSubject,
-                            grade: TranslatorApp.state.selectedGrade
-                        };
-                        let processed = TranslatorApp.quality.postProcess(content, ctx);
-                        
-                        // ✨ STEP 2: Then apply RTL attributes to both math-field and p tags
-                        processed = addRTLToMathFields(processed);
+                        // Apply RTL to both math-field and p tags
+                        let processed = addRTLToMathFields(content);
                         processed = addRTLToParagraphs(processed);
                         
                         return processed;
