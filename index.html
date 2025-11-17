@@ -468,6 +468,27 @@
             background-color: var(--success-color);
             transform: scale(1.1);
         } */
+        /* Fix factorial alignment in MathLive */
+        /* Prevents factorial symbol (!) from overlapping with brackets */
+        math-field .ML__factorial,
+        math-field .ML__operator[data-operator="factorial"],
+        math-field [data-operator="factorial"] {
+            margin-left: 0.1em;
+            padding-left: 0.05em;
+        }
+        
+        /* Fix factorial alignment with brackets */
+        math-field .ML__factorial:has(+ .ML__close),
+        math-field [data-operator="factorial"]:has(+ [data-delimiter=")"]) {
+            margin-left: 0.15em;
+        }
+        
+        /* Alternative approach: Fix spacing for factorial after numbers/brackets */
+        math-field .ML__base + .ML__factorial,
+        math-field .ML__close + .ML__factorial {
+            margin-left: 0.1em;
+        }
+        
         /* MathLive default look (editable) */
         math-field {
             border: 1px solid var(--input-border);
@@ -3069,32 +3090,51 @@
                 },
                 
                 // Special function to handle specific mathematical terms and symbols
-                fixSpecificMathTerms(str) {
+                fixSpecificMathTerms(str, ctx = { subject: 'None', grade: 'None' }) {
                     if (!str || typeof str !== 'string') return str;
+                    
+                    // Only apply to Mathematics grades that use Arabic symbols (1-3, 9-12)
+                    const arabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+                    const shouldApply = ctx.subject === 'Mathematics' && arabicGrades.includes(ctx.grade);
                     
                     let result = str;
                     
-                    // Fix ln to Arabic with subscript e (هـ remains as is)
-                    result = result.replace(/\\ln\b/g, '\\text{لو}_{هـ}');
-                    result = result.replace(/\bln\b/g, '\\text{لو}_{هـ}');
+                    if (shouldApply) {
+                        // Fix ln to Arabic with subscript \hehi (not هـ)
+                        result = result.replace(/\\ln\b/g, '\\text{لو}_{\\hehi}');
+                        result = result.replace(/\bln\b/g, '\\text{لو}_{\\hehi}');
+                        
+                        // Fix det() to "محدد"
+                        result = result.replace(/\\det\b/g, 'محدد');
+                        result = result.replace(/\bdet\b/g, 'محدد');
+                        
+                        // Fix lim to "نها"
+                        result = result.replace(/\\lim\b/g, 'نها');
+                        result = result.replace(/\blim\b/g, 'نها');
+                        
+                        // Fix transpose T to "مد"
+                        result = result.replace(/\^T\b/g, '^مد');
+                        result = result.replace(/T\^T\b/g, 'مد^مد');
+                        // Also handle T as superscript in other contexts
+                        result = result.replace(/([A-Za-zء-ي])\^T\b/g, '$1^مد');
+                        
+                        // Fix \theta → \hehi (Greek letter theta)
+                        result = result.replace(/\\theta\b/g, '\\hehi');
+                    }
                     
-                    // Fix det() to "محدد"
-                    result = result.replace(/\\det\b/g, 'محدد');
-                    result = result.replace(/\bdet\b/g, 'محدد');
+                    // Fix English commas to Arabic commas in ALL translated text (regardless of grade)
+                    // This must be done carefully to avoid breaking LaTeX commands
+                    result = result.replace(/(?<!\\[a-zA-Z]*)(?<!&[#a-zA-Z0-9]*),/g, '،');
                     
-                    // Fix lim to "نها"
-                    result = result.replace(/\\lim\b/g, 'نها');
-                    result = result.replace(/\blim\b/g, 'نها');
+                    // Fix duplicate commas (smart handling)
+                    // Handle patterns like "، ،" or "، و" that create duplicate commas
+                    result = result.replace(/،\s*،/g, '،');
+                    result = result.replace(/،\s+و\s+([^،]+)/g, '، $1'); // "، و X" -> "، X"
+                    result = result.replace(/([^،])\s+و\s+،/g, '$1،'); // "X و ،" -> "X،"
                     
-                    // Fix transpose T to "مد"
-                    result = result.replace(/\^T\b/g, '^مد');
-                    result = result.replace(/T\^T\b/g, 'مد^مد');
-                    
-                    // Fix English commas to Arabic commas in mathematical expressions
-                    result = result.replace(/(?<=[0-9٠-٩a-zA-Z])\s*,\s*(?=[0-9٠-٩a-zA-Z])/g, '، ');
-                    
-                    // Fix "أوجد" to "فأوجد" after conditional statements
-                    result = result.replace(/(?<=إذا كان[^.]*\.)\s*أوجد/g, ' فأوجد');
+                    // Fix conditional grammar: "إذا كان" followed by "أوجد" -> "فأوجد"
+                    // This applies to all Arabic text, not just math
+                    result = result.replace(/(إذا كان[^.]*\.)\s*أوجد/g, '$1 فأوجد');
                     
                     return result;
                 },
@@ -3103,21 +3143,25 @@
                 fixArrowsAndOrdering(str, ctx = { subject: 'None', grade: 'None' }) {
                     if (!str || typeof str !== 'string') return str;
                     
-                    // Only apply to Mathematics grades that use Arabic symbols
+                    // Only apply to Mathematics grades that use Arabic symbols (1-3, 9-12)
                     const arabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
                     if (ctx.subject !== 'Mathematics' || !arabicGrades.includes(ctx.grade)) {
-                        return str;
+                        return str; // Grades 4-8 keep LTR arrows
                     }
                     
                     let result = str;
                     
-                    // Reverse arrows for RTL
+                    // Reverse arrows for RTL (only for Arabic-mode grades)
+                    // Handle Unicode arrows
                     result = result.replace(/→/g, '←');
-                    result = result.replace(/←/g, '→');
-                    result = result.replace(/\\rightarrow/g, '\\leftarrow');
-                    result = result.replace(/\\leftarrow/g, '\\rightarrow');
+                    // Don't reverse already reversed arrows (avoid double reversal)
+                    // Handle LaTeX arrows
+                    result = result.replace(/\\rightarrow(?![a-zA-Z])/g, '__TEMP_LEFT__');
+                    result = result.replace(/\\leftarrow(?![a-zA-Z])/g, '\\rightarrow');
+                    result = result.replace(/__TEMP_LEFT__/g, '\\leftarrow');
                     
-                    // Fix repeated commas (from "and" translation)
+                    // Fix duplicate commas (comprehensive handling)
+                    // This is now handled in fixSpecificMathTerms, but keep as backup
                     result = result.replace(/،\s*،/g, '،');
                     result = result.replace(/,\s*،/g, '،');
                     result = result.replace(/،\s*,/g, '،');
@@ -3331,7 +3375,7 @@
                                 console.log('✅ [After symbol conversion]:', processedValue.substring(0, 150));
                                 
                                 // Apply specific mathematical term fixes
-                                processedValue = this.fixSpecificMathTerms(processedValue);
+                                processedValue = this.fixSpecificMathTerms(processedValue, ctx);
                                 
                                 // Fix arrows and ordering for RTL
                                 processedValue = this.fixArrowsAndOrdering(processedValue, ctx);
@@ -3372,6 +3416,7 @@
                     console.log('🔍 [convertSymbolsToArabic] Input:', str.substring(0, 200));
                     
                     // Map of common mathematical symbols (Latin → Arabic)
+                    // Updated with new mappings per bug report requirements
                     const symbolMap = {
                         'x': 'س',
                         'y': 'ص', 
@@ -3379,7 +3424,7 @@
                         'a': 'أ',
                         'b': 'ب',
                         'c': 'جـ',
-                        'd': 'د',
+                        'd': '\\dal',  // NEW: d as variable → \dal
                         'e': 'هـ',
                         'f': 'و',
                         'g': 'حـ',
@@ -3396,16 +3441,16 @@
                         'u': 'ث',
                         'v': 'ظ',
                         'w': 'و',
-                        // Additional symbols for specific contexts
-                        'F': 'ف',  // for vectors & angles context
-                        'i': 'ي',  // for vectors & angles context  
-                        'j': 'ج',  // for vectors & angles context
-                        'T': 'ت',  // for Sigma notation context
-                        'A': 'أ',  // for matrix context
-                        'P': 'ب',  // for permutation context
-                        'C': 'ج',  // for combination context
-                        'R': 'ر',  // for vectors & angles context
-                        'N': 'ن'   // for vectors & angles context
+                        // Additional symbols for specific contexts (UPDATED)
+                        'F': '\\dotlessqaft',  // NEW: F → \dotlessqaft (vectors/physics)
+                        'i': '\\seent',        // NEW: i → \seent (vectors/physics)
+                        'j': '\\sadt',         // NEW: j → \sadt (vectors/physics)
+                        'T': '\\hah',          // NEW: T (Sigma context) → \hah
+                        'A': '\\alt{\\alef}',  // NEW: A (matrix) → \alt{\alef}
+                        'P': '\\lam',          // NEW: P (permutation) → \lam
+                        'C': '\\dotlessqaft',  // NEW: C (combination) → \dotlessqaft
+                        'R': '\\hah',          // NEW: R → \hah (vectors/physics)
+                        'N': 'نيوتن'           // NEW: N (Newton) → نيوتن (full word)
                     };
                     
                     const protectedElements = [];
@@ -4468,12 +4513,12 @@
                                 }
                                 if (convertSymbols) {
                                     processedValue = this.convertSymbolsToArabic(processedValue);
-                                    processedValue = this.fixSpecificMathTerms(processedValue);
+                                    processedValue = this.fixSpecificMathTerms(processedValue, ctx);
                                     processedValue = this.fixArrowsAndOrdering(processedValue, ctx);
                                     processedValue = this.fixFactorialIssues(processedValue);
                                 }
-                                // إصلاح الفواصل دائمًا للرياضيات
-                                processedValue = processedValue.replace(/,/g, '،');
+                                // إصلاح الفواصل دائمًا للرياضيات (handled in fixSpecificMathTerms, but keep as backup)
+                                processedValue = processedValue.replace(/(?<!\\[a-zA-Z]*)(?<!&[#a-zA-Z0-9]*),/g, '،');
                             }
 
                             // 3. إعادة بناء السمات (Attributes)
@@ -5583,63 +5628,145 @@
                     this.ui.updateProgress('جاري تحليل المحتوى وتجهيز النصوص...');
             
                     this.state.originalJsonData.forEach((file, fileIndex) => {
-                        // Process statement field
-                        processField(file.data.statement, { fileIndex, key: 'statement' });
-                        
-                        // Process parts
-                        file.data.parts?.forEach((part, partIndex) => {
-                            const originalPart = TranslatorApp.state.originalJsonData[fileIndex].data.parts[partIndex];
+                        // Wrap entire file processing in try-catch to prevent single bad file from crashing
+                        try {
+                            // Validate file structure
+                            if (!file || !file.data) {
+                                console.error(`Failed to process file ${fileIndex}: File data is missing or invalid`);
+                                return; // Skip this file and continue
+                            }
                             
-                            // Process stem field
-                            processField(part.stem, { fileIndex, partIndex, key: 'stem' });
-            
-                            // Process answer field
-                            if (originalPart.answer) {
-                                if (Array.isArray(originalPart.answer)) {
-                                    originalPart.answer.forEach((answerItem, answerIndex) => {
-                                        processField(answerItem, { fileIndex, partIndex, answerIndex, key: 'answer', isArray: true });
-                                    });
-                                } else if (typeof originalPart.answer === 'string') {
-                                    processField(originalPart.answer, { fileIndex, partIndex, key: 'answer' });
-                                } else if (typeof originalPart.answer === 'object' && originalPart.answer.hasOwnProperty('value')) {
-                                    processField(originalPart.answer.value, { fileIndex, partIndex, key: 'answer', subKey: 'value' });
-                                } else if (typeof originalPart.answer === 'object' && originalPart.answer.hasOwnProperty('key') && originalPart.answer.hasOwnProperty('value') && originalPart.answer.hasOwnProperty('unit')) {
-                                    // Special case for a more complex object answer type
-                                    processField(originalPart.answer.key, { fileIndex, partIndex, key: 'answer', subKey: 'key' });
-                                    processField(originalPart.answer.value, { fileIndex, partIndex, key: 'answer', subKey: 'value' });
-                                    // Translate unit directly using unitsMap instead of sending to AI
-                                    const originalUnit = originalPart.answer.unit || '';
-                                    const translatedUnit = TranslatorApp.quality.unitsMap[originalUnit.toLowerCase()] || originalUnit;
-                                    this.state.translatedJsonData[fileIndex].data.parts[partIndex].answer.unit = translatedUnit;
+                            // Process statement field
+                            try {
+                                if (file.data.statement) {
+                                    processField(file.data.statement, { fileIndex, key: 'statement' });
                                 }
+                            } catch (statementError) {
+                                console.error(`Failed to process statement in file ${fileIndex}:`, statementError);
+                                // Continue processing other parts
                             }
                             
-                            // Process choices
-                            originalPart.choices?.forEach((choice, choiceIndex) => {
-                                processField(choice.html_content, { fileIndex, partIndex, choiceIndex, key: 'choice' });
+                            // Process parts with nested try-catch for each part
+                            file.data.parts?.forEach((part, partIndex) => {
+                                try {
+                                    // Validate part structure
+                                    if (!part) {
+                                        console.warn(`Part ${partIndex} in file ${fileIndex} is null or undefined, skipping`);
+                                        return;
+                                    }
+                                    
+                                    const originalPart = TranslatorApp.state.originalJsonData[fileIndex]?.data?.parts?.[partIndex];
+                                    if (!originalPart) {
+                                        console.warn(`Original part ${partIndex} in file ${fileIndex} is missing, skipping`);
+                                        return;
+                                    }
+                                    
+                                    // Process stem field
+                                    try {
+                                        if (part.stem) {
+                                            processField(part.stem, { fileIndex, partIndex, key: 'stem' });
+                                        }
+                                    } catch (stemError) {
+                                        console.error(`Failed to process stem for part ${partIndex} in file ${fileIndex}:`, stemError);
+                                    }
+                
+                                    // Process answer field
+                                    try {
+                                        if (originalPart.answer) {
+                                            if (Array.isArray(originalPart.answer)) {
+                                                originalPart.answer.forEach((answerItem, answerIndex) => {
+                                                    try {
+                                                        processField(answerItem, { fileIndex, partIndex, answerIndex, key: 'answer', isArray: true });
+                                                    } catch (answerItemError) {
+                                                        console.error(`Failed to process answer item ${answerIndex} for part ${partIndex} in file ${fileIndex}:`, answerItemError);
+                                                    }
+                                                });
+                                            } else if (typeof originalPart.answer === 'string') {
+                                                processField(originalPart.answer, { fileIndex, partIndex, key: 'answer' });
+                                            } else if (typeof originalPart.answer === 'object' && originalPart.answer.hasOwnProperty('value')) {
+                                                processField(originalPart.answer.value, { fileIndex, partIndex, key: 'answer', subKey: 'value' });
+                                            } else if (typeof originalPart.answer === 'object' && originalPart.answer.hasOwnProperty('key') && originalPart.answer.hasOwnProperty('value') && originalPart.answer.hasOwnProperty('unit')) {
+                                                // Special case for a more complex object answer type
+                                                try {
+                                                    processField(originalPart.answer.key, { fileIndex, partIndex, key: 'answer', subKey: 'key' });
+                                                    processField(originalPart.answer.value, { fileIndex, partIndex, key: 'answer', subKey: 'value' });
+                                                    // Translate unit directly using unitsMap instead of sending to AI
+                                                    const originalUnit = originalPart.answer.unit || '';
+                                                    const translatedUnit = TranslatorApp.quality.unitsMap[originalUnit.toLowerCase()] || originalUnit;
+                                                    if (this.state.translatedJsonData[fileIndex]?.data?.parts?.[partIndex]) {
+                                                        this.state.translatedJsonData[fileIndex].data.parts[partIndex].answer.unit = translatedUnit;
+                                                    }
+                                                } catch (answerObjectError) {
+                                                    console.error(`Failed to process answer object for part ${partIndex} in file ${fileIndex}:`, answerObjectError);
+                                                }
+                                            }
+                                        }
+                                    } catch (answerError) {
+                                        console.error(`Failed to process answer for part ${partIndex} in file ${fileIndex}:`, answerError);
+                                    }
+                                    
+                                    // Process choices
+                                    try {
+                                        originalPart.choices?.forEach((choice, choiceIndex) => {
+                                            try {
+                                                if (choice && choice.html_content) {
+                                                    processField(choice.html_content, { fileIndex, partIndex, choiceIndex, key: 'choice' });
+                                                }
+                                            } catch (choiceError) {
+                                                console.error(`Failed to process choice ${choiceIndex} for part ${partIndex} in file ${fileIndex}:`, choiceError);
+                                            }
+                                        });
+                                    } catch (choicesError) {
+                                        console.error(`Failed to process choices for part ${partIndex} in file ${fileIndex}:`, choicesError);
+                                    }
+                                    
+                                    // Process gap_text_keys
+                                    try {
+                                        if (originalPart.gap_text_keys && Array.isArray(originalPart.gap_text_keys)) {
+                                            originalPart.gap_text_keys.forEach((keyItem, keyIndex) => {
+                                                try {
+                                                    if (keyItem && keyItem.value) {
+                                                        processField(keyItem.value, { fileIndex, partIndex, key: 'gap_text_keys', keyIndex: keyIndex, subKey: 'value' });
+                                                    }
+                                                } catch (gapKeyError) {
+                                                    console.error(`Failed to process gap_text_key ${keyIndex} for part ${partIndex} in file ${fileIndex}:`, gapKeyError);
+                                                }
+                                            });
+                                        }
+                                    } catch (gapKeysError) {
+                                        console.error(`Failed to process gap_text_keys for part ${partIndex} in file ${fileIndex}:`, gapKeysError);
+                                    }
+                                    
+                                    // Process ai.guidelines (for string type questions)
+                                    try {
+                                        if (originalPart.ai && originalPart.ai.guidelines && Array.isArray(originalPart.ai.guidelines)) {
+                                            originalPart.ai.guidelines.forEach((guideline, guidelineIndex) => {
+                                                try {
+                                                    // Translate student_answer
+                                                    if (guideline.student_answer && typeof guideline.student_answer === 'string') {
+                                                        processField(guideline.student_answer, { fileIndex, partIndex, key: 'ai_guideline', guidelineIndex, subKey: 'student_answer' });
+                                                    }
+                                                    // Translate comment
+                                                    if (guideline.comment && typeof guideline.comment === 'string') {
+                                                        processField(guideline.comment, { fileIndex, partIndex, key: 'ai_guideline', guidelineIndex, subKey: 'comment' });
+                                                    }
+                                                } catch (guidelineError) {
+                                                    console.error(`Failed to process guideline ${guidelineIndex} for part ${partIndex} in file ${fileIndex}:`, guidelineError);
+                                                }
+                                            });
+                                        }
+                                    } catch (guidelinesError) {
+                                        console.error(`Failed to process ai.guidelines for part ${partIndex} in file ${fileIndex}:`, guidelinesError);
+                                    }
+                                } catch (partError) {
+                                    console.error(`Failed to process part ${partIndex} in file ${fileIndex}:`, partError);
+                                    // Continue to next part
+                                }
                             });
-                            
-                            // Process gap_text_keys
-                            if (originalPart.gap_text_keys) {
-                                originalPart.gap_text_keys.forEach((keyItem, keyIndex) => {
-                                    processField(keyItem.value, { fileIndex, partIndex, key: 'gap_text_keys', keyIndex: keyIndex, subKey: 'value' });
-                                });
-                            }
-                            
-                            // Process ai.guidelines (for string type questions)
-                            if (originalPart.ai && originalPart.ai.guidelines && Array.isArray(originalPart.ai.guidelines)) {
-                                originalPart.ai.guidelines.forEach((guideline, guidelineIndex) => {
-                                    // Translate student_answer
-                                    if (guideline.student_answer && typeof guideline.student_answer === 'string') {
-                                        processField(guideline.student_answer, { fileIndex, partIndex, key: 'ai_guideline', guidelineIndex, subKey: 'student_answer' });
-                                    }
-                                    // Translate comment
-                                    if (guideline.comment && typeof guideline.comment === 'string') {
-                                        processField(guideline.comment, { fileIndex, partIndex, key: 'ai_guideline', guidelineIndex, subKey: 'comment' });
-                                    }
-                                });
-                            }
-                        });
+                        } catch (fileError) {
+                            console.error(`Failed to process file ${fileIndex} (${file?.name || 'unknown'}):`, fileError);
+                            // Continue to next file - don't stop the entire process
+                        }
                     });
                     
                     const uniqueJobs = [];
@@ -7499,7 +7626,19 @@
                 },
 
                 renderFileContent(data, fileIndex, mappedId) {
+                    // Top-level try-catch to prevent any rendering error from crashing the preview
                     try {
+                        // Validate input parameters
+                        if (!data) {
+                            console.error(`renderFileContent: data is null or undefined for fileIndex ${fileIndex}`);
+                            return `<div class="p-4" style="color: var(--error-color);">Error rendering file: Invalid data structure</div>`;
+                        }
+                        
+                        if (fileIndex === undefined || fileIndex === null) {
+                            console.error(`renderFileContent: fileIndex is invalid`);
+                            return `<div class="p-4" style="color: var(--error-color);">Error rendering file: Invalid file index</div>`;
+                        }
+                        
                         let html = '<div class="space-y-6">';
                 
                         const originalId = TranslatorApp.state.originalJsonData[fileIndex]?.data?.id;
@@ -7605,12 +7744,36 @@
                             }
                         };
                 
-                        html += renderField('البيان (Statement)', TranslatorApp.state.originalJsonData[fileIndex].data.statement, data.statement, 'statement');
+                        // Render statement field with error handling
+                        try {
+                            const originalStatement = TranslatorApp.state.originalJsonData[fileIndex]?.data?.statement;
+                            const translatedStatement = data?.statement;
+                            if (originalStatement !== undefined) {
+                                html += renderField('البيان (Statement)', originalStatement, translatedStatement, 'statement');
+                            }
+                        } catch (statementError) {
+                            console.error(`Error rendering statement for file ${fileIndex}:`, statementError);
+                            html += `<div class="p-4 border rounded-lg" style="border-color: var(--error-color); color: var(--error-color);">Error rendering statement</div>`;
+                        }
                 
-                        data.parts?.forEach((part, partIndex) => {
-                            try {
-                                const originalPart = TranslatorApp.state.originalJsonData[fileIndex].data.parts[partIndex];
-                                if (!originalPart) return;
+                        // Process parts with comprehensive error handling
+                        if (data.parts && Array.isArray(data.parts)) {
+                            data.parts.forEach((part, partIndex) => {
+                                // Nested try-catch for each part to prevent one bad part from breaking the entire file
+                                try {
+                                    // Validate part structure
+                                    if (!part) {
+                                        console.warn(`Part ${partIndex} in file ${fileIndex} is null or undefined`);
+                                        html += `<div class="p-4 border rounded-lg mt-4" style="border-color: var(--error-color); color: var(--error-color);">Error rendering part ${partIndex + 1}: Part data is missing</div>`;
+                                        return;
+                                    }
+                                    
+                                    const originalPart = TranslatorApp.state.originalJsonData[fileIndex]?.data?.parts?.[partIndex];
+                                    if (!originalPart) {
+                                        console.warn(`Original part ${partIndex} in file ${fileIndex} is missing`);
+                                        html += `<div class="p-4 border rounded-lg mt-4" style="border-color: var(--error-color); color: var(--error-color);">Error rendering part ${partIndex + 1}: Original part data is missing</div>`;
+                                        return;
+                                    }
                 
                                 html += '<div class="border-t pt-4 mt-4 space-y-4" style="border-color: var(--card-border);">';
                                 html += `<h5 class="font-semibold text-md" style="color: var(--secondary-text);">الجزء ${partIndex + 1} (النوع: ${part.type || 'غير محدد'})</h5>`;
@@ -7734,19 +7897,31 @@
                                 }
                 
                                 html += '</div>';
-                            } catch (partError) {
-                                console.warn('Error rendering part:', partError);
-                                html += '<div class="border-t pt-4 mt-4 space-y-4" style="border-color: var(--card-border);">';
-                                html += `<h5 class="font-semibold text-md" style="color: var(--error-color);">خطأ في عرض الجزء ${partIndex + 1}</h5>`;
-                                html += '</div>';
-                            }
-                        });
+                                } catch (partError) {
+                                    console.error(`Error rendering part ${partIndex + 1} in file ${fileIndex}:`, partError);
+                                    html += `<div class="p-4 border rounded-lg mt-4" style="border-color: var(--error-color); color: var(--error-color);">Error rendering part ${partIndex + 1}: ${partError.message || 'Unknown error'}</div>`;
+                                }
+                            });
+                        } else if (data.parts === null || data.parts === undefined) {
+                            // Parts array is missing - this is acceptable for some file types
+                            console.warn(`File ${fileIndex} has no parts array`);
+                        } else {
+                            // Parts exists but is not an array
+                            console.error(`File ${fileIndex} has invalid parts structure (not an array)`);
+                            html += `<div class="p-4 border rounded-lg mt-4" style="border-color: var(--error-color); color: var(--error-color);">Error: Parts structure is invalid</div>`;
+                        }
                 
                         html += '</div>';
                         return html;
-                    } catch (error) {
-                        console.error('Render file content error:', error);
-                        return '<div class="space-y-6"><div class="border rounded-lg p-4" style="border-color: var(--card-border);"><h5 class="font-bold flex items-center mb-2" style="color: var(--error-color);">خطأ في عرض المحتوى</h5><div class="p-3 rounded-lg text-sm" style="background-color: var(--bg-color); color: var(--error-color);">فشل في عرض محتوى الملف</div></div></div>';
+                    } catch (renderError) {
+                        // Top-level error handler - return safe error HTML
+                        console.error(`Render file content error for fileIndex ${fileIndex}:`, renderError);
+                        const fileName = data?.name || TranslatorApp.state.originalJsonData[fileIndex]?.name || 'Unknown';
+                        return `<div class="p-4" style="color: var(--error-color); border: 1px solid var(--error-color); border-radius: 8px; background-color: rgba(239, 68, 68, 0.1);">
+                            <h5 class="font-bold mb-2">Error rendering file: ${TranslatorApp.security.sanitize(fileName)}</h5>
+                            <p class="text-sm">${TranslatorApp.security.sanitize(renderError.message || 'Unknown error occurred while rendering file content')}</p>
+                            <p class="text-xs mt-2" style="color: var(--secondary-text);">File index: ${fileIndex}</p>
+                        </div>`;
                     }
                 },
                 updateData(fileIndex, path, value) {
