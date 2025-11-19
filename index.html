@@ -892,6 +892,68 @@
             outline-offset: -2px;
             background-color: color-mix(in srgb, var(--primary-color) 5%, var(--input-bg));
         }
+        /* Symbol Context Menu Styles */
+        #symbolContextMenu {
+            position: absolute;
+            background-color: var(--card-bg);
+            border: 2px solid var(--primary-color);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 8px 0;
+            min-width: 200px;
+            max-width: 300px;
+            z-index: 10000;
+            display: none;
+            font-family: 'Cairo', sans-serif;
+        }
+        
+        #symbolContextMenu.show {
+            display: block;
+        }
+        
+        #symbolContextMenu .menu-header {
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: var(--primary-color);
+            border-bottom: 1px solid var(--card-border);
+            background-color: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg));
+        }
+        
+        #symbolContextMenu .menu-item {
+            display: block;
+            width: 100%;
+            padding: 10px 16px;
+            text-align: right;
+            border: none;
+            background: transparent;
+            color: var(--text-color);
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: background-color 0.2s;
+            border-bottom: 1px solid var(--card-border);
+        }
+        
+        #symbolContextMenu .menu-item:last-child {
+            border-bottom: none;
+        }
+        
+        #symbolContextMenu .menu-item:hover {
+            background-color: color-mix(in srgb, var(--primary-color) 15%, var(--card-bg));
+        }
+        
+        #symbolContextMenu .menu-item .symbol-preview {
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-left: 8px;
+            font-family: 'Cairo', sans-serif;
+        }
+        
+        #symbolContextMenu .menu-item .symbol-desc {
+            color: var(--secondary-text);
+            font-size: 0.85rem;
+            margin-top: 2px;
+        }
     </style>
 </head>
 
@@ -1337,6 +1399,7 @@
                     this.session.load();
                     this.shortcuts.init();
                     this.autoSave.init();
+                    this.symbolManager.init();
                     this.addBeforeUnloadGuard();
                     // --- ⚠️ ابدأ الكود الجديد (Phase 1, Task 4 & 5) ---
                     
@@ -1508,6 +1571,20 @@
                             }
                         } catch (error) {
                             console.error('Preview input event error:', error);
+                        }
+                    });
+                    
+                    // Fix: Add change event listener for math-field elements (they don't fire input events)
+                    this.dom.previewContainer.addEventListener('change', (e) => {
+                        try {
+                            if (e.target.tagName === 'MATH-FIELD') {
+                                const fieldContainer = e.target.closest('.editable-preview-field');
+                                if (fieldContainer) {
+                                    this.preview.handlePreviewFieldUpdate(fieldContainer);
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Preview change event error:', error);
                         }
                     });
                     this.dom.previewContainer.addEventListener('keydown', (e) => {
@@ -2865,57 +2942,166 @@
 
             remoteGlossary: {
                 map: {},
+                
+                /**
+                 * Simple CSV parser that handles quoted fields, commas, and empty values
+                 * @param {string} csvText - Raw CSV text content
+                 * @returns {Array<Array<string>>} - Array of rows, each row is an array of column values
+                 */
+                parseCSV(csvText) {
+                    const rows = [];
+                    let currentRow = [];
+                    let currentField = '';
+                    let inQuotes = false;
+                    
+                    for (let i = 0; i < csvText.length; i++) {
+                        const char = csvText[i];
+                        const nextChar = csvText[i + 1];
+                        
+                        if (char === '"') {
+                            if (inQuotes && nextChar === '"') {
+                                // Escaped quote inside quoted field
+                                currentField += '"';
+                                i++; // Skip next quote
+                            } else {
+                                // Toggle quote state
+                                inQuotes = !inQuotes;
+                            }
+                        } else if (char === ',' && !inQuotes) {
+                            // End of field
+                            currentRow.push(currentField.trim());
+                            currentField = '';
+                        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+                            // End of row
+                            if (char === '\r' && nextChar === '\n') {
+                                i++; // Skip \n after \r
+                            }
+                            if (currentField || currentRow.length > 0) {
+                                currentRow.push(currentField.trim());
+                                rows.push(currentRow);
+                            }
+                            currentRow = [];
+                            currentField = '';
+                        } else {
+                            currentField += char;
+                        }
+                    }
+                    
+                    // Handle last field/row
+                    if (currentField || currentRow.length > 0) {
+                        currentRow.push(currentField.trim());
+                        rows.push(currentRow);
+                    }
+                    
+                    return rows;
+                },
+                
                 async fetchApproved(subject, grade, texts) {
                     this.map = {};
                     if (!subject || subject === 'None') return this.map;
                     
                     try {
-                        // Extract grid number from grade (e.g., "Grade 5" -> "5")
+                        // Extract grade number from grade string (e.g., "Grade 5" -> "5")
                         const gradeNumber = grade.replace(/[^0-9]/g, '');
                         
-                        console.log(`Fetching termbase for Subject: ${subject}, Grade: ${gradeNumber}`);
+                        console.log(`📚 [Glossary] Fetching termbase.csv for Subject: ${subject}, Grade: ${gradeNumber}`);
                         
-                        // Query based on new structure: Subject (Column A), grid (Column B), English Term (Column D), Arabic Term (Column E)
-                        // Filter by Subject and grid
-                        let tq = `select D,E where A = '${(subject || '').replace(/'/g, "\\'")}' and B = '${gradeNumber}'`;
-                        let url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:json&headers=1&tq=${encodeURIComponent(tq)}`;
+                        // Fetch the local CSV file
+                        const res = await fetch('./termbase.csv', { cache: 'no-cache' });
                         
-                        let res = await fetch(url, { cache: 'no-cache' });
+                        if (!res.ok) {
+                            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                        }
                         
-                        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                        const csvText = await res.text();
                         
-                        const raw = await res.text();
-                        const match = raw.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\);/);
-                        if (!match) throw new Error('تعذّر قراءة استجابة gviz.');
+                        if (!csvText || csvText.trim().length === 0) {
+                            throw new Error('CSV file is empty');
+                        }
                         
-                        const data = JSON.parse(match[1]);
-                        const rows = data.table?.rows || [];
+                        // Parse CSV into rows
+                        const rows = this.parseCSV(csvText);
                         
-                        // Column D (index 0) = English Term, Column E (index 1) = Arabic Term
-                        const allPairs = rows.map(r => ({
-                            term: (r.c?.[0]?.v || '').toString().trim(),
-                            translation: (r.c?.[1]?.v || '').toString().trim()
-                        })).filter(x => x.term && x.translation);
-
-                        console.log(`Fetched ${allPairs.length} terms for ${subject} - Grade ${gradeNumber}`);
-
+                        if (rows.length === 0) {
+                            console.warn('[Glossary] CSV file contains no data rows');
+                            return this.map;
+                        }
+                        
+                        // Filter rows based on subject and flexible grade matching
+                        // Column 0 (A): Subject
+                        // Column 1 (B): Grade (can be specific number, empty, or "All")
+                        // Column 3 (D): English Term
+                        // Column 4 (E): Arabic Term
+                        const allPairs = [];
+                        
+                        for (const row of rows) {
+                            // Ensure row has at least 5 columns (0-4)
+                            if (!row || row.length < 5) {
+                                continue;
+                            }
+                            
+                            const rowSubject = (row[0] || '').toString().trim();
+                            const rowGrade = (row[1] || '').toString().trim();
+                            const englishTerm = (row[3] || '').toString().trim();
+                            const arabicTerm = (row[4] || '').toString().trim();
+                            
+                            // Skip rows with missing essential data
+                            if (!englishTerm || !arabicTerm) {
+                                continue;
+                            }
+                            
+                            // CRITICAL: Subject must match exactly
+                            if (rowSubject !== subject) {
+                                continue;
+                            }
+                            
+                            // CRITICAL: Grade matching logic
+                            // Accept row if:
+                            // 1. Grade matches target grade number exactly
+                            // 2. Grade is empty string (global term for this subject)
+                            // 3. Grade is "All" (case-insensitive)
+                            const gradeMatches = 
+                                rowGrade === gradeNumber ||  // Exact match
+                                rowGrade === '' ||            // Empty = global term
+                                rowGrade.toLowerCase() === 'all';  // "All" = global term
+                            
+                            if (gradeMatches) {
+                                allPairs.push({
+                                    term: englishTerm,
+                                    translation: arabicTerm
+                                });
+                            }
+                        }
+                        
+                        console.log(`📚 [Glossary] Found ${allPairs.length} matching terms for ${subject} - Grade ${gradeNumber}`);
+                        
+                        // Apply text filtering if texts array is provided
                         const loweredTexts = Array.isArray(texts) ? texts.map(t => (t || '').toString().toLowerCase()) : [];
                         const map = {};
+                        
                         if (loweredTexts.length > 0) {
+                            // Only include terms that appear in the texts array
                             allPairs.forEach(({ term, translation }) => {
                                 const tl = term.toLowerCase();
-                                if (loweredTexts.some(tx => tx.includes(tl))) map[term] = translation;
+                                if (loweredTexts.some(tx => tx.includes(tl))) {
+                                    map[term] = translation;
+                                }
                             });
                         } else {
-                            allPairs.forEach(({ term, translation }) => { map[term] = translation; });
+                            // Include all matching terms
+                            allPairs.forEach(({ term, translation }) => {
+                                map[term] = translation;
+                            });
                         }
+                        
                         this.map = map;
                         
-                        console.log(`Applied ${Object.keys(map).length} terms from termbase`);
+                        console.log(`✅ [Glossary] Applied ${Object.keys(map).length} terms from termbase`);
                         return this.map;
+                        
                     } catch (e) {
-                        console.warn('GVIZ fetch failed:', e);
-                        TranslatorApp.ui.showAlert('تعذّر جلب المصطلحات المعتمدة (سيتم الاستمرار بدونها).', 'info', 4000);
+                        console.error('❌ [Glossary] CSV fetch/parse failed:', e);
+                        TranslatorApp.ui.showAlert('تعذر تحميل ملف المصطلحات المحلي', 'error', 5000);
                         this.map = {};
                         return this.map;
                     }
@@ -3100,26 +3286,80 @@
                     let result = str;
                     
                     if (shouldApply) {
-                        // Fix ln to Arabic with subscript \hehi (not هـ)
+                        // ===== TRIGONOMETRIC FUNCTIONS (from Nagwa mapping table) =====
+                        // Standard trigonometric functions
+                        result = result.replace(/\\sin\b/g, '\\text{جا}');
+                        result = result.replace(/\\cos\b/g, '\\text{جتا}');
+                        result = result.replace(/\\tan\b/g, '\\text{ظا}');
+                        result = result.replace(/\\cot\b/g, '\\text{ظتا}');
+                        result = result.replace(/\\sec\b/g, '\\text{قا}');
+                        result = result.replace(/\\csc\b/g, '\\text{قتا}');
+                        
+                        // Dotless trigonometric functions (for special typography)
+                        result = result.replace(/\\ardotlesssin\b/g, '\\text{حا}');
+                        result = result.replace(/\\ardotlesscos\b/g, '\\text{حٮا}');
+                        result = result.replace(/\\ardotlesstan\b/g, '\\text{طا}');
+                        result = result.replace(/\\ardotlesscot\b/g, '\\text{طٮا}');
+                        result = result.replace(/\\ardotlesssec\b/g, '\\text{ٯا}');
+                        result = result.replace(/\\ardotlesscsc\b/g, '\\text{ٯٮا}');
+                        
+                        // Hyperbolic trigonometric functions
+                        result = result.replace(/\\sinh\b/g, '\\text{جاز}');
+                        result = result.replace(/\\cosh\b/g, '\\text{جتاز}');
+                        result = result.replace(/\\tanh\b/g, '\\text{ظاز}');
+                        result = result.replace(/\\coth\b/g, '\\text{ظتاز}');
+                        result = result.replace(/\\sech\b/g, '\\text{قاز}');
+                        result = result.replace(/\\csch\b/g, '\\text{قتاز}');
+                        
+                        // Dotless hyperbolic functions
+                        result = result.replace(/\\ardotlesssinh\b/g, '\\text{حاز}');
+                        result = result.replace(/\\ardotlesscosh\b/g, '\\text{حٮاز}');
+                        result = result.replace(/\\ardotlesstanh\b/g, '\\text{طاز}');
+                        result = result.replace(/\\ardotlesscoth\b/g, '\\text{طٮاز}');
+                        
+                        // ===== LOGARITHMIC FUNCTIONS =====
+                        result = result.replace(/\\log\b/g, '\\text{لو}');
+                        // ln (natural logarithm) with subscript \hehi
                         result = result.replace(/\\ln\b/g, '\\text{لو}_{\\hehi}');
                         result = result.replace(/\bln\b/g, '\\text{لو}_{\\hehi}');
                         
-                        // Fix det() to "محدد"
-                        result = result.replace(/\\det\b/g, 'محدد');
-                        result = result.replace(/\bdet\b/g, 'محدد');
+                        // ===== LIMIT FUNCTION =====
+                        // \lim → \text{نهـــــا} (with long dash as per Nagwa table)
+                        result = result.replace(/\\lim\b/g, '\\text{نهـــــا}');
+                        result = result.replace(/\blim\b/g, '\\text{نهـــــا}');
                         
-                        // Fix lim to "نها"
-                        result = result.replace(/\\lim\b/g, 'نها');
-                        result = result.replace(/\blim\b/g, 'نها');
+                        // ===== DETERMINANT =====
+                        result = result.replace(/\\det\b/g, '\\text{محدد}');
+                        result = result.replace(/\bdet\b/g, '\\text{محدد}');
                         
+                        // ===== RADICAL SYMBOL =====
+                        result = result.replace(/\\rad\b/g, '√');
+                        
+                        // ===== TRANSPOSE OPERATOR =====
                         // Fix transpose T to "مد"
                         result = result.replace(/\^T\b/g, '^مد');
                         result = result.replace(/T\^T\b/g, 'مد^مد');
                         // Also handle T as superscript in other contexts
                         result = result.replace(/([A-Za-zء-ي])\^T\b/g, '$1^مد');
                         
-                        // Fix \theta → \hehi (Greek letter theta)
+                        // ===== GREEK LETTERS =====
+                        // \theta → \hehi (from Nagwa mapping table)
                         result = result.replace(/\\theta\b/g, '\\hehi');
+                        
+                        // ===== DIGIT CONVERSION (0-9 → ٠-٩) =====
+                        // Convert English digits to Arabic-Indic digits
+                        const digitMap = {
+                            '0': '٠', '1': '١', '2': '٢', '3': '٣', '4': '٤',
+                            '5': '٥', '6': '٦', '7': '٧', '8': '٨', '9': '٩'
+                        };
+                        // Convert digits but protect LaTeX commands
+                        Object.entries(digitMap).forEach(([en, ar]) => {
+                            const regex = new RegExp(`(?<!\\\\[a-zA-Z]*)(?<![a-zA-Z])${en}(?![a-zA-Z])`, 'g');
+                            result = result.replace(regex, ar);
+                        });
+                        
+                        // ===== PERCENTAGE SYMBOL =====
+                        result = result.replace(/%/g, '٪');
                     }
                     
                     // Fix English commas to Arabic commas in ALL translated text (regardless of grade)
@@ -3371,7 +3611,7 @@
                             
                             // Convert symbols if needed
                             if (shouldConvertSymbols) {
-                                processedValue = this.convertSymbolsToArabic(processedValue);
+                                processedValue = this.convertSymbolsToArabic(processedValue, ctx);
                                 console.log('✅ [After symbol conversion]:', processedValue.substring(0, 150));
                                 
                                 // Apply specific mathematical term fixes
@@ -3410,47 +3650,54 @@
                  * Convert Latin mathematical symbols to Arabic equivalents
                  * For Math Grades 1-3, 9-12
                  */
-                convertSymbolsToArabic(str) {
+                convertSymbolsToArabic(str, ctx = { subject: 'None', grade: 'None' }) {
                     if (!str || typeof str !== 'string') return str;
+
+                    const arabicGrades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+                    const shouldApply = (ctx.subject === 'Mathematics' && arabicGrades.includes(ctx.grade));
+                    if (!shouldApply) {
+                        return str;
+                    }
                     
                     console.log('🔍 [convertSymbolsToArabic] Input:', str.substring(0, 200));
                     
-                    // Map of common mathematical symbols (Latin → Arabic)
-                    // Updated with new mappings per bug report requirements
+                    // Map of common mathematical symbols (Latin → Arabic) based on Nagwa MathLive mapping table
+                    // Using proprietary LaTeX commands from @nagwa-limited/mathlive
                     const symbolMap = {
-                        'x': 'س',
-                        'y': 'ص', 
-                        'z': 'ع',
-                        'a': 'أ',
-                        'b': 'ب',
-                        'c': 'جـ',
-                        'd': '\\dal',  // NEW: d as variable → \dal
-                        'e': 'هـ',
-                        'f': 'و',
-                        'g': 'حـ',
-                        'h': 'ر',
-                        'k': 'ك',
-                        'l': 'ل',
-                        'm': 'م',
-                        'n': 'ن',
-                        'p': 'ع',
-                        'q': 'ق',
-                        'r': 'ر',
-                        's': 'جـ',
-                        't': 'ط',
-                        'u': 'ث',
-                        'v': 'ظ',
-                        'w': 'و',
-                        // Additional symbols for specific contexts (UPDATED)
-                        'F': '\\dotlessqaft',  // NEW: F → \dotlessqaft (vectors/physics)
-                        'i': '\\seent',        // NEW: i → \seent (vectors/physics)
-                        'j': '\\sadt',         // NEW: j → \sadt (vectors/physics)
-                        'T': '\\hah',          // NEW: T (Sigma context) → \hah
-                        'A': '\\alt{\\alef}',  // NEW: A (matrix) → \alt{\alef}
-                        'P': '\\lam',          // NEW: P (permutation) → \lam
-                        'C': '\\dotlessqaft',  // NEW: C (combination) → \dotlessqaft
-                        'R': '\\hah',          // NEW: R → \hah (vectors/physics)
-                        'N': 'نيوتن'           // NEW: N (Newton) → نيوتن (full word)
+                        // Standard variable mappings using Nagwa commands
+                        'x': '\\seen',      // س (seen - isolated form)
+                        'y': '\\sad',       // ص (sad - isolated form)
+                        'z': '\\ain',       // ع (ain - isolated form)
+                        'a': '\\alef',      // ا (alef - isolated form)
+                        'b': '\\beh',       // ب (beh - isolated form)
+                        'c': '\\jeem',      // ج (jeem - isolated form)
+                        'd': '\\dal',       // د (dal - isolated form)
+                        'e': '\\hehi',      // هـ (hehi - for Euler's number to avoid rendering glitches)
+                        'f': '\\feh',       // ف (feh - isolated form)
+                        'g': '\\ghain',     // غ (ghain - isolated form)
+                        'h': '\\hah',       // ح (hah - isolated form)
+                        'k': '\\kaf',       // ك (kaf - isolated form)
+                        'l': '\\lam',       // ل (lam - isolated form)
+                        'm': '\\meem',      // م (meem - isolated form)
+                        'n': '\\noon',      // ن (noon - isolated form)
+                        'p': '\\ain',       // ع (ain - isolated form, reused for p)
+                        'q': '\\qaf',       // ق (qaf - isolated form)
+                        'r': '\\reh',       // ر (reh - isolated form)
+                        's': '\\seen',      // س (seen - isolated form, reused for s)
+                        't': '\\teh',       // ت (teh - isolated form)
+                        'u': '\\theh',      // ث (theh - isolated form)
+                        'v': '\\zah',       // ظ (zah - isolated form)
+                        'w': '\\waw',       // و (waw - isolated form)
+                        // Context-specific overrides (Business Rules)
+                        'C': '\\dotlessqaf',  // C (Combination) → \dotlessqaf (ق without dots)
+                        'F': '\\dotlessqaf',  // F (Force) → \dotlessqaf (ق without dots)
+                        'i': '\\seen',        // i (Unit vector) → \seen (س)
+                        'j': '\\sad',         // j (Unit vector) → \sad (ص)
+                        'T': '\\hah',         // T (Transpose/Sigma) → \hah (ح)
+                        'R': '\\hah',         // R (Resultant) → \hah (ح)
+                        'A': '\\alt{\\alef}', // A (Matrix) → \alt{\alef} (alternate alef)
+                        'P': '\\lam',         // P (Permutation) → \lam (ل)
+                        'N': '\\text{نيوتن}'  // N (Newton) → \text{نيوتن} (full Arabic word)
                     };
                     
                     const protectedElements = [];
@@ -4512,7 +4759,7 @@
                                     processedValue = this.convertDigits(processedValue, true);
                                 }
                                 if (convertSymbols) {
-                                    processedValue = this.convertSymbolsToArabic(processedValue);
+                                    processedValue = this.convertSymbolsToArabic(processedValue, ctx);
                                     processedValue = this.fixSpecificMathTerms(processedValue, ctx);
                                     processedValue = this.fixArrowsAndOrdering(processedValue, ctx);
                                     processedValue = this.fixFactorialIssues(processedValue);
@@ -4617,8 +4864,8 @@
                             processedInner = this.convertDigits(processedInner, true);
                             
                             // Convert Latin symbols (x, y, z) to Arabic (س, ص, ع)
-                            processedValue = this.convertSymbolsToArabic(processedValue);
-                            processedInner = this.convertSymbolsToArabic(processedInner);
+                            processedValue = this.convertSymbolsToArabic(processedValue, ctx);
+                            processedInner = this.convertSymbolsToArabic(processedInner, ctx);
                             
                             // ✨ NEW: Convert English commas to Arabic commas in math-field
                             processedValue = processedValue.replace(/,/g, '،');
@@ -8959,6 +9206,571 @@
                     console.error('Validate translation requirements error:', error);
                     return false;
                 }
+            },
+            
+            symbolManager: {
+                // Comprehensive dictionary of ambiguous symbols and their Arabic translations
+                ambiguousSymbols: {
+                    'a': [
+                        { latex: '\\jeemi', desc: 'Vector/Accel' },
+                        { latex: '\\alt{\\alef}', desc: 'Length/Var' },
+                        { latex: '\\meem', desc: 'Area' }
+                    ],
+                    'b': [
+                        { latex: '\\beh', desc: 'Vector' },
+                        { latex: '\\beh\\prime', desc: 'Constant' }
+                    ],
+                    'c': [
+                        { latex: '\\theh', desc: 'Constant' },
+                        { latex: '\\jeemi\\prime', desc: 'Speed of light' },
+                        { latex: '\\textrm{مح}', desc: 'Axis' }
+                    ],
+                    'C': [
+                        { latex: '\\dotlessqaf', desc: 'Combination' },
+                        { latex: '\\yeh', desc: 'Point/Complex' },
+                        { latex: '\\ain', desc: 'Capacity' },
+                        { latex: '\\waw', desc: 'W' }
+                    ],
+                    'd': [
+                        { latex: '\\dal', desc: 'Distance/Diff' },
+                        { latex: '\\feh', desc: 'Diameter' },
+                        { latex: '\\hehi', desc: 'e' }
+                    ],
+                    'e': [
+                        { latex: '\\hehi', desc: 'Euler' },
+                        { latex: '\\yeh', desc: 'Vector base' }
+                    ],
+                    'F': [
+                        { latex: '\\dotlessqaf', desc: 'Force' },
+                        { latex: '\\teh', desc: 'Function' },
+                        { latex: '\\kaf', desc: 'Farad' },
+                        { latex: '\\hah', desc: 'Friction' }
+                    ],
+                    'g': [
+                        { latex: '\\dal', desc: 'Gravity' },
+                        { latex: '\\reh', desc: 'Gram' }
+                    ],
+                    'h': [
+                        { latex: '\\ain', desc: 'Height' },
+                        { latex: '\\hah', desc: 'Planck/Base' },
+                        { latex: '\\dotlessqaf', desc: 'h' }
+                    ],
+                    'i': [
+                        { latex: '\\seent', desc: 'Unit Vector' },
+                        { latex: '\\teh', desc: 'Imaginary' },
+                        { latex: '\\tah', desc: 'Current' }
+                    ],
+                    'j': [
+                        { latex: '\\sadt', desc: 'Unit Vector' },
+                        { latex: '\\alt{\\dal}', desc: 'Joule' }
+                    ],
+                    'k': [
+                        { latex: '\\kaf', desc: 'Constant' },
+                        { latex: '\\aint', desc: 'Spring' }
+                    ],
+                    'l': [
+                        { latex: '\\lam', desc: 'Length' }
+                    ],
+                    'm': [
+                        { latex: '\\kaf', desc: 'Mass' },
+                        { latex: '\\meem', desc: 'Slope/Meter' },
+                        { latex: '\\sad', desc: 'm' }
+                    ],
+                    'n': [
+                        { latex: '\\noon', desc: 'Number/Index' },
+                        { latex: '\\seen', desc: 'Variable' },
+                        { latex: '\\ain', desc: 'n' }
+                    ],
+                    'P': [
+                        { latex: '\\lam', desc: 'Permutation' },
+                        { latex: '\\dotlessqaf', desc: 'Power/Pressure' },
+                        { latex: '\\alt{\\alef}', desc: 'Point' }
+                    ],
+                    'r': [
+                        { latex: '\\rad', desc: 'Radius-r' },
+                        { latex: '\\reh', desc: 'Radius/Resistance' },
+                        { latex: '\\lam', desc: 'r' }
+                    ],
+                    'R': [
+                        { latex: '\\hah', desc: 'Real/Resultant' },
+                        { latex: '\\reh', desc: 'Resistance' },
+                        { latex: '\\alt{\\dal}', desc: 'R' }
+                    ],
+                    's': [
+                        { latex: '\\feh', desc: 'Displacement' },
+                        { latex: '\\jeemi', desc: 'Arc' },
+                        { latex: '\\qaf', desc: 'S' }
+                    ],
+                    't': [
+                        { latex: '\\noon', desc: 'Time' },
+                        { latex: '\\sheen', desc: 'Tension' },
+                        { latex: '\\kaf', desc: 't' }
+                    ],
+                    'T': [
+                        { latex: '\\text{مد}', desc: 'Transpose' },
+                        { latex: '\\zain', desc: 'Period' },
+                        { latex: '\\tah', desc: 'Tension' },
+                        { latex: '\\reh', desc: 'T' }
+                    ],
+                    'v': [
+                        { latex: '\\ain', desc: 'Velocity' },
+                        { latex: '\\hah', desc: 'Volume' },
+                        { latex: '\\qaf', desc: 'Voltage' },
+                        { latex: '\\sheen', desc: 'v' }
+                    ],
+                    'w': [
+                        { latex: '\\waw', desc: 'Weight' },
+                        { latex: '\\dad', desc: 'Width' },
+                        { latex: '\\sheen', desc: 'w' }
+                    ],
+                    'x': [
+                        { latex: '\\seen', desc: 'x' },
+                        { latex: '\\seent', desc: 'X' }
+                    ],
+                    'y': [
+                        { latex: '\\sad', desc: 'y' },
+                        { latex: '\\sadt', desc: 'Y' }
+                    ],
+                    'z': [
+                        { latex: '\\ain', desc: 'z' },
+                        { latex: '\\sadt', desc: 'Z' }
+                    ]
+                },
+                
+                init() {
+                    try {
+                        // Create the context menu element if it doesn't exist
+                        if (!document.getElementById('symbolContextMenu')) {
+                            const menu = document.createElement('div');
+                            menu.id = 'symbolContextMenu';
+                            document.body.appendChild(menu);
+                        }
+                        
+                        // Add double-click event listener for math-field elements
+                        document.addEventListener('dblclick', (e) => {
+                            const mathField = e.target.closest('math-field');
+                            if (mathField) {
+                                this.handleDoubleClick(e, mathField);
+                            }
+                        });
+                        
+                        // Also handle selection changes (for keyboard selection)
+                        document.addEventListener('mouseup', (e) => {
+                            if (e.target.closest('math-field')) {
+                                setTimeout(() => this.handleSelection(e), 50);
+                            }
+                        });
+                        
+                        // Hide menu when clicking outside
+                        document.addEventListener('click', (e) => {
+                            if (!e.target.closest('#symbolContextMenu') && 
+                                !e.target.closest('math-field')) {
+                                this.hideMenu();
+                            }
+                        });
+                        
+                        // Hide menu on escape key
+                        document.addEventListener('keydown', (e) => {
+                            if (e.key === 'Escape') {
+                                this.hideMenu();
+                            }
+                        });
+                        
+                        console.log('✅ [SymbolManager] Initialized');
+                    } catch (error) {
+                        console.error('SymbolManager init error:', error);
+                    }
+                },
+                
+                handleDoubleClick(e, mathField) {
+                    try {
+                        const fieldContainer = mathField.closest('.editable-preview-field');
+                        if (!fieldContainer) {
+                            return;
+                        }
+                        
+                        // Focus the math-field if not already focused
+                        if (document.activeElement !== mathField) {
+                            mathField.focus();
+                        }
+                        
+                        // Wait a bit for selection to be set
+                        setTimeout(() => {
+                            this.handleSelection(e, mathField, fieldContainer);
+                        }, 50);
+                    } catch (error) {
+                        console.error('handleDoubleClick error:', error);
+                    }
+                },
+                
+                handleSelection(e, mathField = null, fieldContainer = null) {
+                    try {
+                        // Use provided mathField or get from active element
+                        if (!mathField) {
+                            const activeElement = document.activeElement;
+                            if (!activeElement || activeElement.tagName !== 'MATH-FIELD') {
+                                return;
+                            }
+                            mathField = activeElement;
+                        }
+                        
+                        if (!fieldContainer) {
+                            fieldContainer = mathField.closest('.editable-preview-field');
+                            if (!fieldContainer) {
+                                return;
+                            }
+                        }
+                        
+                        // Get selection from MathLive
+                        if (!mathField.getValue) {
+                            return;
+                        }
+                        
+                        // Get the current value
+                        const value = mathField.getValue();
+                        if (!value) {
+                            this.hideMenu();
+                            return;
+                        }
+                        
+                        // Try to get selection - MathLive API may vary
+                        let selection = null;
+                        let selectedText = '';
+                        
+                        // Method 1: Try mathField.selection property
+                        if (mathField.selection && mathField.selection.ranges && mathField.selection.ranges.length > 0) {
+                            selection = mathField.selection;
+                            const range = selection.ranges[0];
+                            selectedText = value.substring(range[0], range[1]);
+                        }
+                        // Method 2: Try window.getSelection() for text selection
+                        else if (window.getSelection && window.getSelection().toString().trim()) {
+                            selectedText = window.getSelection().toString().trim();
+                        }
+                        // Method 3: If no selection, try to get character at cursor
+                        else {
+                            // For double-click, try to extract the word/symbol at click position
+                            if (e && e.clientX && e.clientY) {
+                                // This is a fallback - we'll use the click position
+                                const clickPos = this.getClickPositionInMathField(mathField, e);
+                                if (clickPos !== null) {
+                                    // Try to extract a single character or word around the click
+                                    selectedText = this.extractSymbolAtPosition(value, clickPos);
+                                }
+                            }
+                        }
+                        
+                        if (!selectedText || selectedText.trim().length === 0) {
+                            this.hideMenu();
+                            return;
+                        }
+                        
+                        // Clean the selection: strip LaTeX commands to find core letter
+                        const cleaned = this.cleanSelection(selectedText);
+                        
+                        if (!cleaned) {
+                            this.hideMenu();
+                            return;
+                        }
+                        
+                        // Check if cleaned selection matches an ambiguous symbol
+                        if (this.ambiguousSymbols[cleaned]) {
+                            // Get screen coordinates
+                            const coords = this.getSelectionCoordinates(mathField, selection, e);
+                            if (coords) {
+                                this.showMenu(cleaned, coords, mathField, fieldContainer);
+                            }
+                        } else {
+                            this.hideMenu();
+                        }
+                    } catch (error) {
+                        console.error('SymbolManager handleSelection error:', error);
+                        this.hideMenu();
+                    }
+                },
+                
+                getClickPositionInMathField(mathField, e) {
+                    try {
+                        // This is a simplified approach - in a real implementation,
+                        // you'd need to map the click coordinates to the LaTeX position
+                        // For now, we'll return null and rely on selection API
+                        return null;
+                    } catch (error) {
+                        return null;
+                    }
+                },
+                
+                extractSymbolAtPosition(value, position) {
+                    // Extract a single character or word around the position
+                    if (position === null || position < 0 || position >= value.length) {
+                        return '';
+                    }
+                    
+                    // Try to extract a single letter
+                    const char = value[position];
+                    if (/[a-zA-Z]/.test(char)) {
+                        return char;
+                    }
+                    
+                    // Try to find nearest letter
+                    for (let i = Math.max(0, position - 5); i < Math.min(value.length, position + 5); i++) {
+                        if (/[a-zA-Z]/.test(value[i])) {
+                            return value[i];
+                        }
+                    }
+                    
+                    return '';
+                },
+                
+                cleanSelection(text) {
+                    if (!text) return '';
+                    
+                    // Remove LaTeX commands like \text{...}, \alt{...}, etc.
+                    let cleaned = text;
+                    
+                    // Remove \text{...}
+                    cleaned = cleaned.replace(/\\text\{[^}]*\}/g, '');
+                    
+                    // Remove \alt{...}
+                    cleaned = cleaned.replace(/\\alt\{[^}]*\}/g, '');
+                    
+                    // Remove backslash commands (single letter after \)
+                    cleaned = cleaned.replace(/\\([a-zA-Z]+)/g, '');
+                    
+                    // Remove subscripts/superscripts
+                    cleaned = cleaned.replace(/[_{][^}]*[}]/g, '');
+                    
+                    // Remove special characters, keep only letters
+                    cleaned = cleaned.replace(/[^a-zA-Z]/g, '');
+                    
+                    // Get the first letter (uppercase or lowercase)
+                    const match = cleaned.match(/[a-zA-Z]/);
+                    return match ? match[0] : '';
+                },
+                
+                getSelectionCoordinates(mathField, selection, e) {
+                    try {
+                        // If we have a mouse event, use its coordinates
+                        if (e && e.clientX && e.clientY) {
+                            return { x: e.clientX, y: e.clientY };
+                        }
+                        
+                        // Try to get caret position from MathLive
+                        if (selection && selection.ranges && selection.ranges.length > 0) {
+                            const range = selection.ranges[0];
+                            if (mathField.getCaretPoint) {
+                                try {
+                                    const point = mathField.getCaretPoint(range[1] || range[0]);
+                                    if (point && point.x !== undefined && point.y !== undefined) {
+                                        return { x: point.x, y: point.y };
+                                    }
+                                } catch (err) {
+                                    // getCaretPoint might not be available
+                                }
+                            }
+                        }
+                        
+                        // Fallback: use bounding rect of math-field
+                        const rect = mathField.getBoundingClientRect();
+                        return {
+                            x: rect.left + rect.width / 2,
+                            y: rect.top - 10 // Position above the field
+                        };
+                    } catch (error) {
+                        console.error('getSelectionCoordinates error:', error);
+                        return null;
+                    }
+                },
+                
+                showMenu(symbol, coords, mathField, fieldContainer) {
+                    try {
+                        const menu = document.getElementById('symbolContextMenu');
+                        if (!menu) return;
+                        
+                        const options = this.ambiguousSymbols[symbol];
+                        if (!options || options.length === 0) return;
+                        
+                        // Build menu HTML
+                        let menuHTML = `<div class="menu-header">اختر ترجمة "${symbol}":</div>`;
+                        
+                        options.forEach((option, index) => {
+                            // Render the LaTeX to get preview (simplified - just show description)
+                            menuHTML += `
+                                <button class="menu-item" data-index="${index}" data-latex="${this.escapeHtml(option.latex)}">
+                                    <div class="symbol-preview">${option.latex}</div>
+                                    <div class="symbol-desc">${option.desc}</div>
+                                </button>
+                            `;
+                        });
+                        
+                        menu.innerHTML = menuHTML;
+                        
+                        // Position the menu
+                        menu.style.left = `${coords.x}px`;
+                        menu.style.top = `${coords.y + 20}px`;
+                        
+                        // Show menu
+                        menu.classList.add('show');
+                        
+                        // Attach click handlers
+                        menu.querySelectorAll('.menu-item').forEach(item => {
+                            item.addEventListener('click', (e) => {
+                                const latex = item.getAttribute('data-latex');
+                                this.replaceSymbol(mathField, latex, fieldContainer);
+                                this.hideMenu();
+                            });
+                        });
+                        
+                        // Store references for replacement
+                        menu._mathField = mathField;
+                        menu._fieldContainer = fieldContainer;
+                        
+                    } catch (error) {
+                        console.error('showMenu error:', error);
+                    }
+                },
+                
+                hideMenu() {
+                    const menu = document.getElementById('symbolContextMenu');
+                    if (menu) {
+                        menu.classList.remove('show');
+                        menu._mathField = null;
+                        menu._fieldContainer = null;
+                    }
+                },
+                
+                replaceSymbol(mathField, latex, fieldContainer) {
+                    try {
+                        if (!mathField) {
+                            console.warn('MathField is not available');
+                            return;
+                        }
+                        
+                        // Method 1: Try using executeCommand if available
+                        if (mathField.executeCommand) {
+                            // Get current selection
+                            const selection = mathField.selection;
+                            
+                            // Delete selected text if any
+                            if (selection && selection.ranges && selection.ranges.length > 0) {
+                                mathField.executeCommand(['delete']);
+                            }
+                            
+                            // Insert the LaTeX directly
+                            // MathLive should handle LaTeX commands automatically
+                            mathField.executeCommand(['insert', latex]);
+                        }
+                        // Method 2: Try using setValue and insertText
+                        else if (mathField.setValue) {
+                            const currentValue = mathField.getValue() || '';
+                            const selection = mathField.selection;
+                            
+                            if (selection && selection.ranges && selection.ranges.length > 0) {
+                                const range = selection.ranges[0];
+                                const before = currentValue.substring(0, range[0]);
+                                const after = currentValue.substring(range[1]);
+                                const newValue = before + latex + after;
+                                mathField.setValue(newValue);
+                                
+                                // Set cursor position after inserted text
+                                if (mathField.setSelection) {
+                                    mathField.setSelection([range[0] + latex.length, range[0] + latex.length]);
+                                }
+                            } else {
+                                // No selection, append
+                                mathField.setValue(currentValue + latex);
+                            }
+                        }
+                        // Method 3: Direct value manipulation
+                        else {
+                            const currentValue = mathField.getValue() || '';
+                            const newValue = currentValue + latex;
+                            if (mathField.value !== undefined) {
+                                mathField.value = newValue;
+                            }
+                        }
+                        
+                        // Trigger change event to ensure MathLive updates
+                        if (mathField.dispatchEvent) {
+                            mathField.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        
+                        // Trigger save
+                        if (fieldContainer) {
+                            setTimeout(() => {
+                                if (TranslatorApp.preview && TranslatorApp.preview.handlePreviewFieldUpdate) {
+                                    TranslatorApp.preview.handlePreviewFieldUpdate(fieldContainer);
+                                }
+                            }, 100);
+                        }
+                        
+                        console.log(`✅ [SymbolManager] Replaced symbol with: ${latex}`);
+                    } catch (error) {
+                        console.error('replaceSymbol error:', error);
+                    }
+                },
+                
+                parseLatexForInsertion(latex) {
+                    // Simple parser to break down LaTeX into insertable parts
+                    const parts = [];
+                    let current = '';
+                    let inCommand = false;
+                    let inBrace = false;
+                    let braceDepth = 0;
+                    
+                    for (let i = 0; i < latex.length; i++) {
+                        const char = latex[i];
+                        
+                        if (char === '\\' && !inCommand) {
+                            if (current) {
+                                parts.push({ type: 'text', value: current });
+                                current = '';
+                            }
+                            inCommand = true;
+                            current = '\\';
+                        } else if (inCommand && /[a-zA-Z]/.test(char)) {
+                            current += char;
+                        } else if (inCommand && char === '{') {
+                            current += '{';
+                            inBrace = true;
+                            braceDepth = 1;
+                        } else if (inBrace && char === '{') {
+                            current += '{';
+                            braceDepth++;
+                        } else if (inBrace && char === '}') {
+                            current += '}';
+                            braceDepth--;
+                            if (braceDepth === 0) {
+                                inBrace = false;
+                                inCommand = false;
+                                parts.push({ type: 'command', value: current });
+                                current = '';
+                            }
+                        } else if (inCommand && !/[a-zA-Z{}]/.test(char)) {
+                            inCommand = false;
+                            parts.push({ type: 'command', value: current });
+                            current = char;
+                        } else {
+                            current += char;
+                        }
+                    }
+                    
+                    if (current) {
+                        if (inCommand) {
+                            parts.push({ type: 'command', value: current });
+                        } else {
+                            parts.push({ type: 'text', value: current });
+                        }
+                    }
+                    
+                    return parts;
+                },
+                
+                escapeHtml(text) {
+                    const div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                }
             }
         };
 
@@ -9030,6 +9842,9 @@
         </div>
     </div>
     <!-- --- ⚠️ انتهى الكود الجديد --- -->
+
+    <!-- Symbol Context Menu -->
+    <div id="symbolContextMenu"></div>
 
 </body>
 
