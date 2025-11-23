@@ -8811,242 +8811,378 @@
                 },
 
                 async toJson() {
-                    const useMappedIds = TranslatorApp.dom.useMappedIdsCheckbox.checked;
-                    let mappedIds = [];
-                    let idCounter = 0;
-                    
-                    if (useMappedIds) {
-                        try {
-                            mappedIds = JSON.parse(TranslatorApp.dom.mappedIdsInput.value);
-                            if (!Array.isArray(mappedIds)) throw new Error('not array');
-                        } catch (e) {
-                            return TranslatorApp.ui.showAlert('قائمة المعرفات (mapped_id) غير صالحة. يرجى التأكد من أنها مصفوفة JSON صحيحة.', 'error');
-                        }
-                    }
-                    
-                    const selectedTranslator = TranslatorApp.state.selectedTranslator;
-                    const sourceId = TranslatorApp.state.translators[selectedTranslator];
-                    
-                    const zip = new JSZip();
-                    
-                    // Helper function to add RTL direction to all math-field tags in content
-                    const addRTLToMathFields = (content) => {
-                        if (!content || typeof content !== 'string') return content;
+                    try {
+                        // ============================================
+                        // STEP 1: Parse and validate mapped IDs input
+                        // ============================================
+                        const useMappedIds = TranslatorApp.dom.useMappedIdsCheckbox.checked;
+                        let mappedIds = [];
+                        let idCounter = 0;
                         
-                        // Add dir="rtl", locale="ar", and lang="ar" to all <math-field> tags
-                        let processed = content;
-                        
-                        // Pattern 1: math-field without dir attribute
-                        processed = processed.replace(
-                            /<math-field(?!\s+[^>]*\bdir=)([^>]*)>/gi,
-                            (match, attrs) => {
-                                // Add dir="rtl" if not present
-                                return `<math-field dir="rtl"${attrs}>`;
+                        if (useMappedIds) {
+                            try {
+                                mappedIds = JSON.parse(TranslatorApp.dom.mappedIdsInput.value);
+                                if (!Array.isArray(mappedIds)) throw new Error('not array');
+                            } catch (e) {
+                                return TranslatorApp.ui.showAlert('قائمة المعرفات (mapped_id) غير صالحة. يرجى التأكد من أنها مصفوفة JSON صحيحة.', 'error');
                             }
-                        );
-                        
-                        // Pattern 2: math-field with dir="ltr" - change to rtl
-                        processed = processed.replace(
-                            /<math-field([^>]*)\bdir="ltr"([^>]*)>/gi,
-                            '<math-field$1dir="rtl"$2>'
-                        );
-                        
-                        // Pattern 3: Add locale="ar" if not present
-                        processed = processed.replace(
-                            /<math-field(?!\s+[^>]*\blocale=)([^>]*)>/gi,
-                            (match, attrs) => {
-                                return `<math-field locale="ar"${attrs}>`;
-                            }
-                        );
-                        
-                        // Pattern 4: math-field with locale="en" - change to ar
-                        processed = processed.replace(
-                            /<math-field([^>]*)\blocale="en"([^>]*)>/gi,
-                            '<math-field$1locale="ar"$2>'
-                        );
-                        
-                        // Pattern 5: Add lang="ar" if not present
-                        processed = processed.replace(
-                            /<math-field(?!\s+[^>]*\blang=)([^>]*)>/gi,
-                            (match, attrs) => {
-                                return `<math-field lang="ar"${attrs}>`;
-                            }
-                        );
-                        
-                        // Pattern 6: math-field with lang="en" - change to ar
-                        processed = processed.replace(
-                            /<math-field([^>]*)\blang="en"([^>]*)>/gi,
-                            '<math-field$1lang="ar"$2>'
-                        );
-                        
-                        return processed;
-                    };
-                    
-                    // ✨ NEW FEATURE: Add dir="rtl" to all <p> tags
-                    const addRTLToParagraphs = (content) => {
-                        if (!content || typeof content !== 'string') return content;
-                        
-                        let processed = content;
-                        
-                        // Add dir="rtl" to all <p> tags that don't have it
-                        // Uses negative lookahead to avoid adding dir="rtl" if already present
-                        processed = processed.replace(
-                            /<p(?!\s+[^>]*\bdir=["']rtl["'])([^>]*)>/gi,
-                            '<p dir="rtl"$1>'
-                        );
-                        
-                        // Also handle <P> (uppercase) tags
-                        processed = processed.replace(
-                            /<P(?!\s+[^>]*\bdir=["']rtl["'])([^>]*)>/g,
-                            '<P dir="rtl"$1>'
-                        );
-                        
-                        return processed;
-                    };
-                    
-                    // Combined processing function
-                    const applyRTLToContent = (content) => {
-                        if (!content || typeof content !== 'string') return content;
-                        
-                        // Apply RTL to both math-field and p tags
-                        let processed = addRTLToMathFields(content);
-                        processed = addRTLToParagraphs(processed);
-                        
-                        return processed;
-                    };
-                    
-                    console.log('🔍 [Export] Starting export from translatedJsonData:', TranslatorApp.state.translatedJsonData.length, 'files');
-                    
-                    for (const translatedFile of TranslatorApp.state.translatedJsonData) {
-                        const finalData = JSON.parse(JSON.stringify(translatedFile.data));
-                        console.log('📦 [Export] Processing file:', translatedFile.name, '- Sample stem:', finalData.parts?.[0]?.stem?.substring(0, 100));
-                        const originalId = TranslatorApp.state.originalJsonData.find(f => f.name === translatedFile.name)?.data?.id;
-                    
-                        // ✨ ENHANCED: Process all string fields to add RTL to both math-field AND <p> tags
-                        // Process statement
-                        if (finalData.statement) {
-                            finalData.statement = applyRTLToContent(finalData.statement);
                         }
                         
-                        // Process parts
-                        if (finalData.parts && Array.isArray(finalData.parts)) {
-                            finalData.parts.forEach(part => {
-                                // Process stem
-                                if (part.stem) {
-                                    part.stem = applyRTLToContent(part.stem);
+                        const selectedTranslator = TranslatorApp.state.selectedTranslator;
+                        const sourceId = TranslatorApp.state.translators[selectedTranslator];
+                        
+                        // ============================================
+                        // STEP 2: Create nested ZIP structure
+                        // ============================================
+                        // Parent ZIP will contain: JSONS.zip and bulk_upload.csv
+                        const zipParent = new JSZip();
+                        // Nested ZIP will contain all JSON files
+                        const zipJSONs = new JSZip();
+                        
+                        // ============================================
+                        // STEP 3: Helper functions for RTL processing
+                        // ============================================
+                        
+                        // Helper function to add RTL direction to all math-field tags in content
+                        const addRTLToMathFields = (content) => {
+                            if (!content || typeof content !== 'string') return content;
+                            
+                            // Add dir="rtl", locale="ar", and lang="ar" to all <math-field> tags
+                            let processed = content;
+                            
+                            // Pattern 1: math-field without dir attribute
+                            processed = processed.replace(
+                                /<math-field(?!\s+[^>]*\bdir=)([^>]*)>/gi,
+                                (match, attrs) => {
+                                    // Add dir="rtl" if not present
+                                    return `<math-field dir="rtl"${attrs}>`;
                                 }
-                                
-                                // Process answer
-                                if (typeof part.answer === 'string') {
-                                    part.answer = applyRTLToContent(part.answer);
+                            );
+                            
+                            // Pattern 2: math-field with dir="ltr" - change to rtl
+                            processed = processed.replace(
+                                /<math-field([^>]*)\bdir="ltr"([^>]*)>/gi,
+                                '<math-field$1dir="rtl"$2>'
+                            );
+                            
+                            // Pattern 3: Add locale="ar" if not present
+                            processed = processed.replace(
+                                /<math-field(?!\s+[^>]*\blocale=)([^>]*)>/gi,
+                                (match, attrs) => {
+                                    return `<math-field locale="ar"${attrs}>`;
                                 }
-                                
-                                // Process choices
-                                if (part.choices && Array.isArray(part.choices)) {
-                                    part.choices.forEach(choice => {
-                                        if (choice.html_content) {
-                                            choice.html_content = applyRTLToContent(choice.html_content);
-                                        }
-                                    });
+                            );
+                            
+                            // Pattern 4: math-field with locale="en" - change to ar
+                            processed = processed.replace(
+                                /<math-field([^>]*)\blocale="en"([^>]*)>/gi,
+                                '<math-field$1locale="ar"$2>'
+                            );
+                            
+                            // Pattern 5: Add lang="ar" if not present
+                            processed = processed.replace(
+                                /<math-field(?!\s+[^>]*\blang=)([^>]*)>/gi,
+                                (match, attrs) => {
+                                    return `<math-field lang="ar"${attrs}>`;
                                 }
-                                
-                                // Process gap_text_keys
-                                if (part.gap_text_keys && Array.isArray(part.gap_text_keys)) {
-                                    part.gap_text_keys.forEach(key => {
-                                        if (key.value) {
-                                            key.value = applyRTLToContent(key.value);
-                                        }
-                                    });
-                                }
-                                
-                                // Process AI guidelines
-                                if (part.ai && part.ai.guidelines && Array.isArray(part.ai.guidelines)) {
-                                    part.ai.guidelines.forEach(guideline => {
-                                        if (guideline.comment) {
-                                            guideline.comment = applyRTLToContent(guideline.comment);
-                                        }
-                                        if (guideline.student_answer) {
-                                            guideline.student_answer = applyRTLToContent(guideline.student_answer);
-                                        }
-                                    });
-                                }
-                            });
-                        }
-                    
-                        finalData.metadata = finalData.metadata || {};
-                        finalData.metadata.title = "";
-                        finalData.metadata.language = 'ar';
-                        finalData.metadata.dialect = ['modern_standard'];
-                        finalData.metadata.country = 'eg';
-                    
-                        if (sourceId) {
-                            finalData.metadata.source_id = {
-                                "value": parseInt(sourceId),
-                                "page_number": null
-                            };
-                        } else {
-                            finalData.metadata.source_id = null;
-                        }
-                    
+                            );
+                            
+                            // Pattern 6: math-field with lang="en" - change to ar
+                            processed = processed.replace(
+                                /<math-field([^>]*)\blang="en"([^>]*)>/gi,
+                                '<math-field$1lang="ar"$2>'
+                            );
+                            
+                            return processed;
+                        };
+                        
+                        // Add dir="rtl" to all <p> tags
+                        const addRTLToParagraphs = (content) => {
+                            if (!content || typeof content !== 'string') return content;
+                            
+                            let processed = content;
+                            
+                            // Add dir="rtl" to all <p> tags that don't have it
+                            // Uses negative lookahead to avoid adding dir="rtl" if already present
+                            processed = processed.replace(
+                                /<p(?!\s+[^>]*\bdir=["']rtl["'])([^>]*)>/gi,
+                                '<p dir="rtl"$1>'
+                            );
+                            
+                            // Also handle <P> (uppercase) tags
+                            processed = processed.replace(
+                                /<P(?!\s+[^>]*\bdir=["']rtl["'])([^>]*)>/g,
+                                '<P dir="rtl"$1>'
+                            );
+                            
+                            return processed;
+                        };
+                        
+                        // Combined processing function
+                        const applyRTLToContent = (content) => {
+                            if (!content || typeof content !== 'string') return content;
+                            
+                            // Apply RTL to both math-field and p tags
+                            let processed = addRTLToMathFields(content);
+                            processed = addRTLToParagraphs(processed);
+                            
+                            return processed;
+                        };
+                        
+                        // Helper function to strip HTML tags from metadata description
                         const stripHtml = (html) => {
                             if (!html) return "";
                             const doc = new DOMParser().parseFromString(html, 'text/html');
                             return doc.body.textContent || "";
                         };
-                    
-                        const cleanStatement = stripHtml(finalData.statement);
-                        const cleanStem = finalData.parts?.[0]?.stem ? stripHtml(finalData.parts[0].stem) : '';
-                        let description = (cleanStatement + ' ' + cleanStem).trim();
-                        finalData.metadata.description = description;
-                    
-                        if (finalData.parts) {
-                            finalData.parts.forEach((part) => {
-                                if (part.type === 'input_box' && part.answer && part.answer.hasOwnProperty('value')) {
-                                    const originalUnit = TranslatorApp.state.originalJsonData
-                                        .find(f => f.name === translatedFile.name)?.data.parts
-                                        .find(p => p.n === part.n)?.answer.unit || '';
-                                    part.answer.unit = TranslatorApp.quality.unitsMap[originalUnit.toLowerCase()] || originalUnit;
+                        
+                        // Helper function to escape CSV fields (enclose in quotes and escape internal quotes)
+                        const escapeCsvField = (field) => {
+                            if (field === null || field === undefined) return '""';
+                            const str = String(field);
+                            // Escape double quotes by doubling them, then wrap in quotes
+                            return `"${str.replace(/"/g, '""')}"`;
+                        };
+                        
+                        // ============================================
+                        // STEP 4: Process all JSON files and prepare CSV data
+                        // ============================================
+                        console.log('🔍 [Export] Starting export from translatedJsonData:', TranslatorApp.state.translatedJsonData.length, 'files');
+                        
+                        // Array to store CSV rows
+                        const csvRows = [];
+                        
+                        // Process each translated file
+                        for (const translatedFile of TranslatorApp.state.translatedJsonData) {
+                            const finalData = JSON.parse(JSON.stringify(translatedFile.data));
+                            console.log('📦 [Export] Processing file:', translatedFile.name, '- Sample stem:', finalData.parts?.[0]?.stem?.substring(0, 100));
+                            
+                            // Get original JSON data for CSV extraction
+                            const originalData = TranslatorApp.state.originalJsonData.find(f => f.name === translatedFile.name)?.data;
+                            const originalId = originalData?.id;
+                            
+                            // ============================================
+                            // STEP 4a: Apply RTL processing to all string content
+                            // ============================================
+                            
+                            // Process statement
+                            if (finalData.statement) {
+                                finalData.statement = applyRTLToContent(finalData.statement);
+                            }
+                            
+                            // Process parts
+                            if (finalData.parts && Array.isArray(finalData.parts)) {
+                                finalData.parts.forEach(part => {
+                                    // Process stem
+                                    if (part.stem) {
+                                        part.stem = applyRTLToContent(part.stem);
+                                    }
+                                    
+                                    // Process answer
+                                    if (typeof part.answer === 'string') {
+                                        part.answer = applyRTLToContent(part.answer);
+                                    }
+                                    
+                                    // Process choices
+                                    if (part.choices && Array.isArray(part.choices)) {
+                                        part.choices.forEach(choice => {
+                                            if (choice.html_content) {
+                                                choice.html_content = applyRTLToContent(choice.html_content);
+                                            }
+                                        });
+                                    }
+                                    
+                                    // Process gap_text_keys
+                                    if (part.gap_text_keys && Array.isArray(part.gap_text_keys)) {
+                                        part.gap_text_keys.forEach(key => {
+                                            if (key.value) {
+                                                key.value = applyRTLToContent(key.value);
+                                            }
+                                        });
+                                    }
+                                    
+                                    // Process AI guidelines
+                                    if (part.ai && part.ai.guidelines && Array.isArray(part.ai.guidelines)) {
+                                        part.ai.guidelines.forEach(guideline => {
+                                            if (guideline.comment) {
+                                                guideline.comment = applyRTLToContent(guideline.comment);
+                                            }
+                                            if (guideline.student_answer) {
+                                                guideline.student_answer = applyRTLToContent(guideline.student_answer);
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                            
+                            // ============================================
+                            // STEP 4b: Update metadata
+                            // ============================================
+                            finalData.metadata = finalData.metadata || {};
+                            finalData.metadata.title = "";
+                            finalData.metadata.language = 'ar';
+                            
+                            // Determine currentMappedId (for CSV and metadata)
+                            let currentMappedId;
+                            if (useMappedIds && idCounter < mappedIds.length) {
+                                currentMappedId = mappedIds[idCounter];
+                                finalData.metadata.mapped_id = currentMappedId;
+                                idCounter++;
+                            } else {
+                                currentMappedId = originalId; // Fallback to original ID
+                                finalData.metadata.mapped_id = originalId;
+                            }
+                            
+                            // Set source_id
+                            if (sourceId) {
+                                finalData.metadata.source_id = {
+                                    "value": parseInt(sourceId),
+                                    "page_number": null
+                                };
+                            } else {
+                                finalData.metadata.source_id = null;
+                            }
+                            
+                            // Clean and set description
+                            const cleanStatement = stripHtml(finalData.statement);
+                            const cleanStem = finalData.parts?.[0]?.stem ? stripHtml(finalData.parts[0].stem) : '';
+                            let description = (cleanStatement + ' ' + cleanStem).trim();
+                            finalData.metadata.description = description;
+                            
+                            // Handle input_box units
+                            if (finalData.parts) {
+                                finalData.parts.forEach((part) => {
+                                    if (part.type === 'input_box' && part.answer && part.answer.hasOwnProperty('value')) {
+                                        const originalUnit = originalData?.parts
+                                            ?.find(p => p.n === part.n)?.answer?.unit || '';
+                                        part.answer.unit = TranslatorApp.quality.unitsMap[originalUnit.toLowerCase()] || originalUnit;
+                                    }
+                                });
+                            }
+                            
+                            // ============================================
+                            // STEP 4c: Prepare CSV row data
+                            // ============================================
+                            
+                            // Extract Lesson Id from original metadata
+                            // Path: metadata.source_id.value or source_id.value
+                            let lessonId = '';
+                            if (originalData?.metadata?.source_id?.value) {
+                                lessonId = String(originalData.metadata.source_id.value);
+                            } else if (originalData?.source_id?.value) {
+                                lessonId = String(originalData.source_id.value);
+                            }
+                            
+                            // Extract Attributes (Question Type) from translated data
+                            // Look at the first part's type: parts[0].type
+                            let attributes = '';
+                            if (finalData.parts && finalData.parts.length > 0 && finalData.parts[0].type) {
+                                attributes = String(finalData.parts[0].type);
+                            }
+                            
+                            // Extract Category from original metadata
+                            // Path: metadata.category or default to 'lesson'
+                            let category = 'lesson';
+                            if (originalData?.metadata?.category) {
+                                category = String(originalData.metadata.category);
+                            }
+                            
+                            // Extract Dialect from original metadata
+                            // If it's an array, join with spaces; otherwise, use 'modern_standard'
+                            let dialect = 'modern_standard';
+                            if (originalData?.metadata?.dialect) {
+                                if (Array.isArray(originalData.metadata.dialect)) {
+                                    dialect = originalData.metadata.dialect.join(' ');
+                                } else {
+                                    dialect = String(originalData.metadata.dialect);
                                 }
-                            });
+                            }
+                            
+                            // Build CSV row: Question Id,Lang,Lesson Id,Attributes,Category,Dialect
+                            const csvRow = [
+                                escapeCsvField(currentMappedId),  // Question Id
+                                escapeCsvField('ar'),            // Lang (hardcoded)
+                                escapeCsvField(lessonId),        // Lesson Id
+                                escapeCsvField(attributes),      // Attributes
+                                escapeCsvField(category),        // Category
+                                escapeCsvField(dialect)          // Dialect
+                            ].join(',');
+                            
+                            csvRows.push(csvRow);
+                            
+                            // ============================================
+                            // STEP 4d: Add JSON file to nested ZIP
+                            // ============================================
+                            let fileNameToUse = translatedFile.name;
+                            if (useMappedIds && currentMappedId) {
+                                fileNameToUse = `${currentMappedId}.json`;
+                            }
+                            
+                            zipJSONs.file(fileNameToUse, JSON.stringify(finalData, null, 2));
+                            console.log(`✅ [Export] Processed file: ${fileNameToUse} - RTL applied to all math-field and <p> tags`);
                         }
-                    
-                        let fileNameToUse = translatedFile.name;
-                        // Assign the mapped ID for both export and display
-                        if (useMappedIds && idCounter < mappedIds.length) {
-                            const newMappedId = mappedIds[idCounter];
-                            finalData.metadata.mapped_id = newMappedId;
-                            fileNameToUse = `${newMappedId}.json`;
-                            idCounter++;
-                        } else {
-                            finalData.metadata.mapped_id = originalId; // Fallback to original ID for the mapped_id field
+                        
+                        console.log(`🎉 [Export] Total files processed: ${TranslatorApp.state.translatedJsonData.length} - All math-fields and paragraphs have RTL direction in exported JSON`);
+                        
+                        // Validate mapped IDs count
+                        if (useMappedIds && idCounter < TranslatorApp.state.translatedJsonData.length) {
+                            TranslatorApp.ui.showAlert(`تحذير: عدد المعرفات (${idCounter}) أقل من عدد الملفات (${TranslatorApp.state.translatedJsonData.length}).`, 'error');
                         }
-                    
-                        zip.file(fileNameToUse, JSON.stringify(finalData, null, 2));
-                        console.log(`✅ [Export] Processed file: ${fileNameToUse} - RTL applied to all math-field and <p> tags`);
-                    }
-                    
-                    console.log(`🎉 [Export] Total files processed: ${TranslatorApp.state.translatedJsonData.length} - All math-fields and paragraphs have RTL direction in exported JSON`);
-                    
-                    if (useMappedIds && idCounter < TranslatorApp.state.translatedJsonData.length) {
-                        TranslatorApp.ui.showAlert(`تحذير: عدد المعرفات (${idCounter}) أقل من عدد الملفات (${TranslatorApp.state.translatedJsonData.length}).`, 'error');
-                    }
-                    
-                    try {
-                        const content = await zip.generateAsync({ type: "blob" });
+                        
+                        // ============================================
+                        // STEP 5: Generate nested ZIP (JSONS.zip)
+                        // ============================================
+                        const jsonZipBlob = await zipJSONs.generateAsync({ type: "blob" });
+                        
+                        // ============================================
+                        // STEP 6: Generate CSV content
+                        // ============================================
+                        // CSV Headers: Question Id,Lang,Lesson Id,Attributes,Category,Dialect
+                        const csvHeaders = ['Question Id', 'Lang', 'Lesson Id', 'Attributes', 'Category', 'Dialect']
+                            .map(escapeCsvField)
+                            .join(',');
+                        
+                        const csvContent = [csvHeaders, ...csvRows].join('\n');
+                        
+                        // ============================================
+                        // STEP 7: Add JSONS.zip and bulk_upload.csv to parent ZIP
+                        // ============================================
+                        zipParent.file('JSONS.zip', jsonZipBlob);
+                        zipParent.file('bulk_upload.csv', csvContent);
+                        
+                        // ============================================
+                        // STEP 8: Generate and download parent ZIP
+                        // ============================================
+                        const parentZipBlob = await zipParent.generateAsync({ type: "blob" });
+                        
+                        // Generate random filename: Batch_YYYY_MM_DD_HHMMSS.zip
+                        const now = new Date();
+                        const year = now.getFullYear();
+                        const month = String(now.getMonth() + 1).padStart(2, '0');
+                        const day = String(now.getDate()).padStart(2, '0');
+                        const hours = String(now.getHours()).padStart(2, '0');
+                        const minutes = String(now.getMinutes()).padStart(2, '0');
+                        const seconds = String(now.getSeconds()).padStart(2, '0');
+                        const randomSuffix = Math.floor(Math.random() * 10000);
+                        const zipFileName = `Batch_${year}_${month}_${day}_${hours}${minutes}${seconds}_${randomSuffix}.zip`;
+                        
                         const link = document.createElement("a");
-                        link.href = URL.createObjectURL(content);
-                        link.download = `translated_questions_${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+                        link.href = URL.createObjectURL(parentZipBlob);
+                        link.download = zipFileName;
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
                         URL.revokeObjectURL(link.href);
-                        TranslatorApp.ui.showAlert('تم تصدير ملفات JSON بنجاح!', 'success');
+                        
+                        TranslatorApp.ui.showAlert('تم تصدير ملفات JSON و CSV بنجاح!', 'success');
+                        
                     } catch (e) {
-                        console.error('ZIP creation error:', e);
-                        TranslatorApp.ui.showAlert(`فشل إنشاء ملف ZIP: ${e.message}`, 'error');
+                        console.error('Export error:', e);
+                        TranslatorApp.ui.showAlert(`فشل في التصدير: ${e.message}`, 'error');
                     }
-                },
-                annotator: {
+                }
+            },
+            annotator: {
                     canvas: null,
                     fabricCanvas: null,
                     currentImage: null,
@@ -9158,8 +9294,7 @@
                             TranslatorApp.ui.showAlert(`فشل في حفظ الصورة: ${error.message}`, 'error');
                         }
                     }
-                }
-            },
+                },
             
             /**
              * Validate that all required fields are selected before enabling translation
